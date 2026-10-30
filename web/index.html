@@ -1,0 +1,1264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demeisen CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap">
+<style>
+/* Layout: sticky header with tabs over a single 1180px column; the to-do view adds a side rail that stacks below 900px */
+:root {
+  --bg: #F3F5F8;
+  --surface: #FFFFFF;
+  --ink: #18212E;
+  --muted: #5B6676;
+  --line: #DCE1E8;
+  --hover: #F7F9FB;
+  --accent: #1E4D8C;
+  --accent-soft: #E3ECF8;
+  --on-accent: #FFFFFF;
+  --ci: #22706C;
+  --ci-soft: #DDF0EE;
+  --dem: #4A4F8C;
+  --dem-soft: #E8E9F6;
+  --intel: #8A5A12;
+  --intel-soft: #F6ECDB;
+  --ok: #2F7A4F;
+  --ok-soft: #E0F1E7;
+  --warn: #9A6200;
+  --crit: #B3261E;
+  --crit-soft: #FBE4E2;
+  --mark: #FFE7A3;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --f-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F141B; --surface: #171E28; --ink: #E6EAF0; --muted: #97A3B4; --line: #2A3442; --hover: #1C2531;
+    --accent: #86ADE8; --accent-soft: #1D2B40; --on-accent: #0F141B;
+    --ci: #6FC7C1; --ci-soft: #14302E; --dem: #A9ADE8; --dem-soft: #24264A;
+    --intel: #DDB06A; --intel-soft: #2E2618; --ok: #6CC08F; --ok-soft: #17291F;
+    --warn: #E2A93B; --crit: #F08A82; --crit-soft: #34191A; --mark: #5A4A16;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F141B; --surface: #171E28; --ink: #E6EAF0; --muted: #97A3B4; --line: #2A3442; --hover: #1C2531;
+  --accent: #86ADE8; --accent-soft: #1D2B40; --on-accent: #0F141B;
+  --ci: #6FC7C1; --ci-soft: #14302E; --dem: #A9ADE8; --dem-soft: #24264A;
+  --intel: #DDB06A; --intel-soft: #2E2618; --ok: #6CC08F; --ok-soft: #17291F;
+  --warn: #E2A93B; --crit: #F08A82; --crit-soft: #34191A; --mark: #5A4A16;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+a { color: var(--accent); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.muted { color: var(--muted); }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* Header */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; padding-block: 10px; }
+.brand { font-family: var(--f-display); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+.brand span { font-family: var(--f-body); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-left: 8px; }
+nav.tabs { display: flex; flex-wrap: wrap; gap: 2px; flex: 1; min-width: 0; }
+nav.tabs a { padding: 8px 12px; border-radius: var(--r); color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
+nav.tabs a:hover { color: var(--ink); background: var(--hover); }
+nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+@media (max-width: 900px) {
+  header.top { position: static; }
+  header.top .wrap { gap: 8px; }
+  nav.tabs a { padding: 6px 10px; }
+}
+.proforma { background: var(--intel-soft); border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.proforma .wrap { padding-block: 6px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.proforma strong { color: var(--intel); letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; margin-right: 6px; }
+
+main .wrap { padding-block: 24px 72px; }
+h1 { font-family: var(--f-display); font-size: 26px; font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.pagehead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.sub { color: var(--muted); margin: 4px 0 0; max-width: 65ch; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.stack { display: flex; flex-direction: column; gap: 20px; }
+
+/* Controls */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--r); border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 500; cursor: pointer; white-space: nowrap; }
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--accent); border-color: var(--line); }
+.btn.ghost:hover { background: var(--hover); filter: none; }
+.btn.sm { padding: 5px 10px; font-size: 13px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+input[type="text"], input[type="email"], input[type="search"], input[type="date"], input[type="tel"], select, textarea {
+  width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
+}
+textarea { resize: vertical; min-height: 84px; line-height: 1.5; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.lbl em { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.fgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.span-all { grid-column: 1 / -1; }
+.form-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.form-error { color: var(--crit); font-weight: 500; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 8px 16px; cursor: pointer; font-weight: 500; color: var(--muted); }
+.seg label + input + label { border-left: 1px solid var(--line); }
+.seg input:checked + label { background: var(--accent); color: var(--on-accent); }
+.seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chk { display: inline-flex; gap: 8px; align-items: center; padding: 5px 12px 5px 9px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; background: var(--surface); }
+.chk:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* Pills */
+.pill { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; line-height: 1.6; }
+.pill.inv { background: var(--accent-soft); color: var(--accent); }
+.pill.ci { background: var(--ci-soft); color: var(--ci); }
+.pill.dem { background: var(--dem-soft); color: var(--dem); }
+.pill.oth { background: var(--hover); color: var(--muted); border: 1px solid var(--line); }
+.review-note { font-size: 12.5px; color: var(--warn); }
+.proforma details { font-size: 12.5px; }
+.proforma details ul { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow: auto; }
+.proforma .acts-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.proforma .unsaved { display: inline-block; margin-left: 6px; font-weight: 600; color: var(--crit); }
+.pill.intel { background: var(--intel-soft); color: var(--intel); }
+.pill.ixn { background: var(--hover); color: var(--ink); border: 1px solid var(--line); }
+.pill.done { background: var(--ok-soft); color: var(--ok); }
+.pill.open { background: var(--hover); color: var(--muted); border: 1px solid var(--line); }
+button.pill { border: 0; cursor: pointer; font: inherit; font-size: 12px; font-weight: 500; }
+
+/* To-do */
+.todo-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .todo-grid { grid-template-columns: minmax(0, 1fr); } }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: var(--ink); }
+.tile:hover { background: var(--hover); }
+.tile .n { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.tile.crit .n { color: var(--crit); }
+.tile.warn .n { color: var(--warn); }
+.toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.toolbar select { width: auto; }
+.quickadd { padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr) 170px 150px auto; gap: 8px; }
+@media (max-width: 640px) { .quickadd { grid-template-columns: 1fr 1fr; } .quickadd > :first-child, .quickadd > :last-child { grid-column: 1 / -1; } }
+.group { display: flex; flex-direction: column; gap: 8px; }
+ul.acts { list-style: none; margin: 0; padding: 0; }
+.act { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.act:last-child { border-bottom: 0; }
+.act input[type="checkbox"] { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); cursor: pointer; }
+.act-desc { font-weight: 500; cursor: pointer; }
+.act.is-done .act-desc { text-decoration: line-through; color: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; color: var(--muted); font-size: 13px; margin-top: 3px; }
+.due { font-family: var(--f-mono); font-size: 12.5px; white-space: nowrap; padding-top: 2px; color: var(--muted); }
+.due.overdue { color: var(--crit); font-weight: 500; }
+.due.week { color: var(--warn); }
+.empty { padding: 16px 14px; color: var(--muted); }
+.feed { list-style: none; margin: 0; padding: 0; }
+.feed li { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
+.feed li:last-child { border-bottom: 0; }
+.feed .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; }
+.feed .txt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.feed button.open-int { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.feed button.open-int:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rail-head { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+
+/* Log form */
+.log-form { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+.hint { font-size: 13px; color: var(--muted); }
+.pgroup { display: flex; flex-direction: column; gap: 8px; }
+.people-box { display: flex; flex-direction: column; gap: 14px; }
+.arows { display: flex; flex-direction: column; gap: 8px; }
+.arow { display: grid; grid-template-columns: minmax(0, 1fr) 170px 150px auto; gap: 8px; }
+@media (max-width: 640px) { .arow { grid-template-columns: 1fr 1fr; } .arow > :first-child { grid-column: 1 / -1; } }
+.section-rule { border: 0; border-top: 1px solid var(--line); margin: 0; }
+
+/* Search */
+.filters { padding: 14px; display: grid; grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); gap: 10px; }
+.filters .dates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; grid-column: span 2; }
+@media (max-width: 800px) { .filters { grid-template-columns: 1fr 1fr; } .filters > :first-child { grid-column: 1 / -1; } }
+.results { display: flex; flex-direction: column; gap: 12px; }
+.ix { padding: 16px; display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 120px; }
+.ix.flash { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.ix-head { display: flex; gap: 8px 10px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+.ix-head .mono { font-weight: 500; }
+.ix p { margin: 0; max-width: 75ch; white-space: pre-wrap; }
+.ix .next { padding: 10px 12px; background: var(--hover); border-radius: var(--r); }
+.ix ul.mini { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ix ul.mini li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+mark { background: var(--mark); color: inherit; padding: 0 1px; border-radius: 2px; }
+
+/* Overview & one-pager */
+.two-col { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 900px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
+.tile .n.date { font-size: 20px; padding-block: 4px; }
+.tile .small { font-size: 12.5px; color: var(--muted); }
+.op-head { padding: 18px 20px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+.op-name { font-family: var(--f-display); font-size: 30px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.op-tags { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.op-facts { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); margin-top: 10px; max-width: 70ch; }
+.op-facts strong { color: var(--ink); font-weight: 500; }
+.op-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sec-head { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.sec-foot { padding: 10px 14px; border-top: 1px solid var(--line); }
+.months { display: flex; gap: 8px; padding: 12px 14px 10px; }
+.month { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.month .barwrap { height: 56px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.month .bar { width: 100%; max-width: 34px; background: var(--accent); border-radius: 3px 3px 0 0; }
+.month .bar.zero { background: var(--line); }
+.month .cnt { font-family: var(--f-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.month .m { font-size: 11px; color: var(--muted); }
+.feed .txt.three { -webkit-line-clamp: 3; }
+.feed .row .by { margin-left: auto; white-space: nowrap; }
+.feed .row .by::before { content: "by "; }
+.small-tbl th, .small-tbl td { padding: 8px 14px; font-size: 13px; }
+.chip-btns { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+.chip-btns button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.chip-btns button:hover { border-color: var(--accent); color: var(--accent); }
+.chip-btns .mono { color: var(--muted); margin-left: 4px; }
+.next-list { list-style: none; margin: 0; padding: 0; }
+.next-list li { padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.next-list li:last-child { border-bottom: 0; }
+.next-list .mono { color: var(--muted); font-size: 12px; margin-right: 6px; }
+
+/* Interactions list */
+.seg label .mono { opacity: 0.75; font-size: 12px; margin-left: 4px; }
+.ix-table td { vertical-align: top; }
+.ix-row { cursor: pointer; }
+.ix-row.is-open, tbody tr.ix-open, tbody tr.ix-open:hover { background: var(--hover); }
+tbody tr.ix-open td { padding-top: 0; }
+.ix-table .nowrap { white-space: nowrap; }
+.ix-table .ppl { min-width: 140px; max-width: 220px; color: var(--muted); font-size: 13px; }
+.ix-table .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 260px; max-width: 60ch; }
+.ix-detail { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; max-width: 90ch; }
+.ix-detail p { margin: 0; white-space: pre-wrap; }
+.ix-detail .next { padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.ix-detail ul.mini { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ix-detail ul.mini li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover { background: var(--hover); }
+td.num, th.num { text-align: right; }
+.warn-note { color: var(--warn); font-size: 12px; margin-left: 6px; font-family: var(--f-body); }
+.edit-panel { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+
+/* Toast */
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: var(--r); font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 20; max-width: calc(100vw - 32px); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">Demeisen <span>Investor CRM</span></div>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#home" data-view="home">Overview</a>
+      <a href="#todo" data-view="todo">To-do</a>
+      <a href="#interactions" data-view="interactions">Interactions</a>
+      <a href="#allocator" data-view="allocator">Allocator one-pager</a>
+      <a href="#log" data-view="log">Log interaction / intel</a>
+      <a href="#search" data-view="search">Search</a>
+      <a href="#companies" data-view="companies">Companies</a>
+      <a href="#people" data-view="people">People</a>
+    </nav>
+  </div>
+</header>
+<div class="proforma">
+  <div class="wrap">
+    <div id="data-status"></div>
+    <div class="acts-row">
+      <label class="btn ghost sm" for="import-file" style="cursor:pointer">Import workbook (.xlsx)</label>
+      <input type="file" id="import-file" accept=".xlsx,.xlsm" hidden>
+      <button type="button" class="btn sm" id="export">Save workbook (.xlsx)</button>
+      <button type="button" class="linkbtn" id="reset">Reset to example data</button>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<main><div class="wrap" id="view"></div></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const KEY = 'demeisen-crm-proforma-v2';
+const TODAY = new Date(); TODAY.setHours(0, 0, 0, 0);
+const iso = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
+const rel = n => { const x = new Date(TODAY); x.setDate(x.getDate() + n); return iso(x); };
+const daysFrom = s => Math.round((new Date(s + 'T00:00') - TODAY) / 864e5);
+const fmt = s => s ? new Date(s + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function seed() {
+  // Fictional example data shown until a workbook is imported. Never put real names here.
+  return {
+    companies: [
+      { id: 1, type: 'Investor', name: 'Northgate Capital', investorType: 'Hedge Fund', investmentType: 'SMA', notes: '' },
+      { id: 2, type: 'Investor', name: 'Harbour Endowment', investorType: 'Endowment', investmentType: 'Co-Mingled', notes: '' },
+      { id: 3, type: 'Prime CI', name: 'Example Prime Bank', investorType: 'Cap Intro', investmentType: '', notes: '' },
+      { id: 4, type: 'Demeisen', name: 'Demeisen', investorType: 'Hedge Fund', investmentType: '', notes: '' }
+    ],
+    people: [
+      { id: 1, name: 'Sam Rivers', email: 'sam.rivers@example.com', companyId: 1, title: '', phone: '' },
+      { id: 2, name: 'Jo Marsh', email: 'jo.marsh@example.org', companyId: 2, title: '', phone: '' },
+      { id: 3, name: 'Alex Staff', email: 'alex.staff@example.net', companyId: 4, title: '', phone: '' },
+      { id: 4, name: 'Chris Staff', email: 'chris.staff@example.net', companyId: 4, title: '', phone: '' },
+      { id: 5, name: 'Pat Lane', email: 'pat.lane@example.com', companyId: 3, title: '', phone: '' }
+    ],
+    interactions: [
+      { id: 1, type: 'Interaction', date: rel(-21), companyId: 1, recordedBy: 3, people: [3, 4, 1],
+        desc: 'Intro meeting with the Northgate external manager team. Walked through strategy, capacity and track record.',
+        next: 'Send DDQ and monthly letters. Follow up on SMA terms.' },
+      { id: 2, type: 'Interaction', date: rel(-14), companyId: 3, recordedBy: 3, people: [3, 5],
+        desc: 'Catch-up with Example Prime Bank cap intro on upcoming investor events.',
+        next: 'Confirm a slot at the London cap intro event.' },
+      { id: 3, type: 'Intel', date: rel(-9), companyId: 2, recordedBy: 4, people: [4],
+        desc: 'Heard Harbour Endowment is looking to add managers in our space over the next two quarters.',
+        next: 'Reach out to Jo Marsh.' },
+      { id: 4, type: 'Interaction', date: rel(-3), companyId: 2, recordedBy: 4, people: [4, 2],
+        desc: 'Call with Jo Marsh on platform requirements: fees, liquidity and reporting.',
+        next: 'Share fee proposal.' },
+      { id: 5, type: 'Intel', date: rel(-1), companyId: null, recordedBy: 3, people: [3],
+        desc: 'Market colour: several multi-managers reportedly tightening drawdown limits.', next: '' }
+    ],
+    actions: [
+      { id: 1, desc: 'Send DDQ to Sam Rivers', due: rel(-18), ownerId: 3, interactionId: 1, status: 'Done' },
+      { id: 2, desc: 'Follow up on Northgate SMA terms', due: rel(-2), ownerId: 3, interactionId: 1, status: 'Open' },
+      { id: 3, desc: 'Confirm London cap intro event slot', due: rel(3), ownerId: 4, interactionId: 2, status: 'Open' },
+      { id: 4, desc: 'Email Jo Marsh re capacity', due: rel(-6), ownerId: 4, interactionId: 3, status: 'Done' },
+      { id: 5, desc: 'Send fee proposal to Harbour Endowment', due: rel(5), ownerId: 4, interactionId: 4, status: 'Open' },
+      { id: 6, desc: 'Update investor letter distribution list', due: rel(18), ownerId: 3, interactionId: null, status: 'Open' },
+      { id: 7, desc: 'Book follow-up call with Pat Lane', due: '', ownerId: 4, interactionId: 2, status: 'Open' }
+    ]
+  };
+}
+function load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+// Every edit counts as an unsaved change until the workbook is saved; import, export and reset pass false.
+function save(changed = true) {
+  if (changed) { db.meta = db.meta || { source: '', loadedAt: new Date().toISOString(), warnings: [] }; db.meta.changes = (db.meta.changes || 0) + 1; }
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { return false; }
+  if (typeof renderStatus === 'function') renderStatus();
+  return true;
+}
+let db = load() || seed();
+
+const byId = (arr, id) => arr.find(x => x.id === id);
+const company = id => byId(db.companies, id);
+const person = id => byId(db.people, id);
+const nextId = arr => arr.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+const demeisenPeople = () => db.people.filter(p => company(p.companyId)?.type === 'Demeisen');
+const tcls = t => ({ 'Investor': 'inv', 'Prime CI': 'ci', 'Demeisen': 'dem', 'Other': 'oth' }[t] || 'ixn');
+const COMPANY_TYPES = ['Investor', 'Prime CI', 'Other', 'Demeisen'];
+const coPill = co => co ? `<button type="button" class="pill ${tcls(co.type)}" data-filter-co="${co.id}" title="Open ${esc(co.name)} one-pager">${esc(co.name)}</button>` : '';
+const typePill = t => `<span class="pill ${t === 'Intel' ? 'intel' : 'ixn'}">${t}</span>`;
+const ownerOpts = sel => demeisenPeople().map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+const companyOpts = (sel, { excludeDemeisen = true } = {}) => COMPANY_TYPES
+  .filter(t => !(excludeDemeisen && t === 'Demeisen'))
+  .map(t => {
+    const cs = db.companies.filter(c => c.type === t).sort((a, b) => a.name.localeCompare(b.name));
+    return cs.length ? `<optgroup label="${t}">${cs.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : '';
+  }).join('');
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+/* ---------- Routing ---------- */
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople };
+const view = document.getElementById('view');
+function route() {
+  let v = location.hash.slice(1);
+  if (!VIEWS[v]) v = 'home';
+  document.querySelectorAll('nav.tabs a').forEach(a => { if (a.dataset.view === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  VIEWS[v]();
+}
+function goto(v) { if (location.hash.slice(1) === v) route(); else location.hash = v; window.scrollTo(0, 0); }
+window.addEventListener('hashchange', () => { route(); window.scrollTo(0, 0); });
+
+/* ---------- To-do ---------- */
+let todoOwner = 'all', showDone = false;
+function bucket(a) {
+  if (!a.due) return 'nodate';
+  const d = daysFrom(a.due);
+  return d < 0 ? 'overdue' : d <= 7 ? 'week' : 'later';
+}
+function dueLabel(a) {
+  if (!a.due) return 'No date';
+  const d = daysFrom(a.due);
+  if (a.status !== 'Open') return fmt(a.due);
+  if (d < 0) return `${-d} day${d === -1 ? '' : 's'} overdue`;
+  if (d === 0) return 'Today';
+  if (d === 1) return 'Tomorrow';
+  if (d <= 7) return `In ${d} days`;
+  return fmt(a.due);
+}
+function actionRow(a) {
+  const it = a.interactionId ? byId(db.interactions, a.interactionId) : null;
+  const co = it && it.companyId ? company(it.companyId) : null;
+  const owner = person(a.ownerId);
+  return `<li class="act ${a.status !== 'Open' ? 'is-done' : ''}">
+    <input type="checkbox" id="act-${a.id}" data-act="${a.id}" ${a.status === 'Done' ? 'checked' : ''} aria-label="Mark ${esc(a.desc)} done">
+    <div><label for="act-${a.id}" class="act-desc">${esc(a.desc)}</label>
+      <div class="meta">${coPill(co)}<span>${esc(owner ? owner.name : 'Unassigned')}</span>
+      ${it ? `<button type="button" class="linkbtn" data-open-int="${it.id}">From ${it.type.toLowerCase()}, ${fmt(it.date)}</button>` : '<span>Standalone action</span>'}</div>
+    </div>
+    <div class="due ${a.status === 'Open' ? bucket(a) : ''}">${dueLabel(a)}</div>
+  </li>`;
+}
+function renderTodo() {
+  const mine = db.actions.filter(a => todoOwner === 'all' || a.ownerId === +todoOwner);
+  const open = mine.filter(a => a.status === 'Open');
+  const sortDue = (a, b) => (a.due || '9999').localeCompare(b.due || '9999');
+  const groups = { overdue: [], week: [], later: [], nodate: [] };
+  open.forEach(a => groups[bucket(a)].push(a));
+  Object.values(groups).forEach(g => g.sort(sortDue));
+  const done = mine.filter(a => a.status !== 'Open').sort((a, b) => sortDue(b, a));
+  const labels = { overdue: 'Overdue', week: 'Due in next 7 days', later: 'Later', nodate: 'No due date' };
+  const recent = [...db.interactions].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 6);
+
+  view.innerHTML = `
+    <div class="pagehead">
+      <div><h1>To-do</h1><p class="sub">Open actions from interactions and intel. Tick an action to mark it done.</p></div>
+      <div class="toolbar">
+        <label class="lbl" for="td-owner">Owner</label>
+        <select id="td-owner"><option value="all">Everyone</option>${ownerOpts(+todoOwner)}</select>
+      </div>
+    </div>
+    <div class="todo-grid">
+      <div class="stack">
+        <div class="tiles">
+          ${['overdue', 'week', 'later', 'nodate'].map(k => `<a class="panel tile ${k === 'overdue' && groups[k].length ? 'crit' : k === 'week' && groups[k].length ? 'warn' : ''}" href="#todo" data-jump="grp-${k}">
+            <span class="n">${groups[k].length}</span><span class="lbl">${labels[k]}</span></a>`).join('')}
+        </div>
+        <form class="panel quickadd" id="qa">
+          <input type="text" id="qa-desc" placeholder="Add a standalone action, e.g. Chase signed NDA" aria-label="New action">
+          <select id="qa-owner" aria-label="Owner">${ownerOpts(todoOwner === 'all' ? demeisenPeople()[0]?.id : +todoOwner)}</select>
+          <input type="date" id="qa-due" aria-label="Due date">
+          <button class="btn" type="submit">Add action</button>
+        </form>
+        ${['overdue', 'week', 'later', 'nodate'].map(k => `
+          <section class="group" id="grp-${k}">
+            <h2>${labels[k]} <span class="mono">${groups[k].length}</span></h2>
+            <div class="panel">${groups[k].length ? `<ul class="acts">${groups[k].map(actionRow).join('')}</ul>` : `<div class="empty">Nothing here.</div>`}</div>
+          </section>`).join('')}
+        <section class="group">
+          <h2>Completed <span class="mono">${done.length}</span> <button type="button" class="linkbtn" id="td-toggle-done" style="text-transform:none;letter-spacing:0;font-weight:400">${showDone ? 'Hide' : 'Show'}</button></h2>
+          ${showDone ? `<div class="panel">${done.length ? `<ul class="acts">${done.map(actionRow).join('')}</ul>` : `<div class="empty">No completed actions yet.</div>`}</div>` : ''}
+        </section>
+      </div>
+      <aside class="panel">
+        <div class="rail-head"><h2>Recent interactions &amp; intel</h2></div>
+        <ul class="feed">${recent.map(it => {
+          const co = it.companyId ? company(it.companyId) : null;
+          return `<li><button type="button" class="open-int" data-open-int="${it.id}">
+            <span class="row"><span class="mono muted">${fmt(it.date)}</span>${typePill(it.type)}${co ? `<span class="pill ${tcls(co.type)}">${esc(co.name)}</span>` : '<span class="muted">General</span>'}</span>
+            <span class="txt">${esc(it.desc)}</span></button></li>`;
+        }).join('')}</ul>
+        <div class="rail-head" style="border-top:1px solid var(--line);border-bottom:0"><a href="#log" class="btn ghost sm">Log interaction / intel</a></div>
+      </aside>
+    </div>`;
+
+  view.querySelector('#td-owner').addEventListener('change', e => { todoOwner = e.target.value; renderTodo(); });
+  view.querySelector('#td-toggle-done').addEventListener('click', () => { showDone = !showDone; renderTodo(); });
+  view.querySelectorAll('[data-jump]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault(); document.getElementById(a.dataset.jump).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  view.querySelector('#qa').addEventListener('submit', e => {
+    e.preventDefault();
+    const desc = view.querySelector('#qa-desc').value.trim();
+    if (!desc) { view.querySelector('#qa-desc').focus(); toast('Type the action first.'); return; }
+    db.actions.push({ id: nextId(db.actions), desc, ownerId: +view.querySelector('#qa-owner').value, due: view.querySelector('#qa-due').value, interactionId: null, status: 'Open' });
+    save(); renderTodo(); toast('Action added');
+  });
+}
+
+/* ---------- Log interaction / intel ---------- */
+let logPrefill = null, logEdit = null;
+function peopleChoices(coId, checked) {
+  const groups = [['Demeisen', demeisenPeople()]];
+  if (coId) { const c = company(coId); groups.push([c.name, db.people.filter(p => p.companyId === coId)]); }
+  const shown = new Set(groups.flatMap(([, ps]) => ps.map(p => p.id)));
+  const extra = checked.filter(id => !shown.has(id)).map(person).filter(Boolean);
+  if (extra.length) groups.push(['Also on this entry', extra]);
+  return groups.map(([g, ps]) => `<div class="pgroup"><span class="lbl">${esc(g)}</span><div class="chips">${
+    ps.length ? ps.map(p => `<label class="chk"><input type="checkbox" name="lg-person" value="${p.id}" ${checked.includes(p.id) ? 'checked' : ''}>${esc(p.name)}</label>`).join('')
+    : `<span class="muted">No people recorded for ${esc(g)} yet. <a href="#people">Add them under People</a>.</span>`}</div></div>`).join('');
+}
+let arowSeq = 0;
+function actionInputRow(a = null) {
+  const i = ++arowSeq;
+  return `<div class="arow" ${a ? `data-aid="${a.id}"` : ''}>
+    <input type="text" class="a-desc" id="lg-a-desc-${i}" placeholder="e.g. Send DDQ" aria-label="Action" value="${esc(a?.desc || '')}">
+    <select class="a-owner" id="lg-a-owner-${i}" aria-label="Owner"><option value="">No owner</option>${ownerOpts(a ? a.ownerId : demeisenPeople()[0]?.id)}</select>
+    <input type="date" class="a-due" id="lg-a-due-${i}" aria-label="Due date" value="${esc(a?.due || '')}">
+    <button type="button" class="btn ghost sm" data-rm-row>Remove</button></div>`;
+}
+const FORMATS = ['Meeting', 'Call', 'Email', 'Intro', 'Conference', 'Event', 'Feedback', 'Other'];
+function renderLog() {
+  const ed = logEdit != null ? byId(db.interactions, logEdit) : null;
+  logEdit = null;
+  const me = demeisenPeople()[0]?.id;
+  const by = ed ? ed.recordedBy : me;
+  const fmts = ed?.format && !FORMATS.includes(ed.format) ? [...FORMATS, ed.format] : FORMATS;
+  const edActs = ed ? db.actions.filter(a => a.interactionId === ed.id) : [];
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>${ed ? 'Update entry' : 'Log interaction / intel'}</h1>
+      <p class="sub">${ed ? `Editing the ${ed.type.toLowerCase()} from ${fmt(ed.date)}. Saving replaces the entry; it goes into the workbook next time you save it.`
+        : 'An interaction is a meeting, call or email with an investor or cap intro desk. Intel is something a Demeisen person heard, about a specific company or the market in general.'}</p></div></div>
+    <form class="panel log-form" id="lg" novalidate>
+      <div class="field"><span class="lbl">Entry type</span>
+        <div class="seg" role="radiogroup" aria-label="Entry type">
+          <input type="radio" name="lg-type" id="lg-type-i" value="Interaction" ${ed?.type !== 'Intel' ? 'checked' : ''}><label for="lg-type-i">Interaction</label>
+          <input type="radio" name="lg-type" id="lg-type-n" value="Intel" ${ed?.type === 'Intel' ? 'checked' : ''}><label for="lg-type-n">Intel</label>
+        </div>
+      </div>
+      <div class="fgrid">
+        <div class="field"><label class="lbl" for="lg-date">Date</label><input type="date" id="lg-date" value="${ed ? esc(ed.date) : iso(TODAY)}"></div>
+        <div class="field"><label class="lbl" for="lg-co" id="lg-co-lbl">Company</label>
+          <select id="lg-co"><option value="">Choose a company</option>${companyOpts(ed?.companyId)}</select></div>
+        <div class="field"><label class="lbl" for="lg-by">Recorded by</label><select id="lg-by"><option value="">Unknown</option>${ownerOpts(by)}</select></div>
+        <div class="field"><label class="lbl" for="lg-kind">Format <em>(optional)</em></label>
+          <select id="lg-kind">${fmts.map(o => `<option ${ed?.format === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>
+        <div class="field"><label class="lbl" for="lg-via">Via (Prime CI) <em>(optional)</em></label>
+          <select id="lg-via"><option value="">None</option>${db.companies.filter(c => c.type === 'Prime CI').map(c => `<option value="${c.id}" ${ed?.viaId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><span class="lbl">People involved</span><div class="people-box" id="lg-people">${peopleChoices(ed?.companyId || null, ed ? ed.people : [me])}</div></div>
+      <div class="field"><label class="lbl" for="lg-desc">Description</label>
+        <textarea id="lg-desc" rows="5" placeholder="What was discussed, or what you heard">${esc(ed?.desc || '')}</textarea></div>
+      <div class="field"><label class="lbl" for="lg-next">Next steps <em>(free text, for context)</em></label>
+        <textarea id="lg-next" rows="2" placeholder="e.g. Send DDQ, follow up on terms in two weeks">${esc(ed?.next || '')}</textarea></div>
+      <hr class="section-rule">
+      <div class="field"><span class="lbl">Actions <em>(each one appears on the to-do list)</em></span>
+        <div class="arows" id="lg-actions">${edActs.length ? edActs.map(actionInputRow).join('') : actionInputRow()}</div>
+        <div><button type="button" class="btn ghost sm" id="lg-add-row">Add another action</button></div>
+      </div>
+      <div class="form-actions"><button class="btn" type="submit">${ed ? 'Save changes' : 'Save entry'}</button>
+        ${ed ? '<button type="button" class="btn ghost" id="lg-cancel">Cancel</button>' : ''}<span class="form-error" id="lg-err" role="alert"></span></div>
+    </form>`;
+
+  const f = view.querySelector('#lg');
+  const coSel = f.querySelector('#lg-co');
+  const kind = f.querySelector('#lg-kind').closest('.field');
+  const checkedPeople = () => [...f.querySelectorAll('input[name="lg-person"]:checked')].map(x => +x.value);
+  const setType = () => {
+    const intel = f.querySelector('#lg-type-n').checked;
+    f.querySelector('#lg-co-lbl').innerHTML = intel ? 'Company <em>(optional for intel)</em>' : 'Company';
+    coSel.options[0].textContent = intel ? 'None (general market colour)' : 'Choose a company';
+    kind.hidden = intel;
+  };
+  f.querySelectorAll('input[name="lg-type"]').forEach(r => r.addEventListener('change', setType));
+  setType();
+  coSel.addEventListener('change', () => {
+    const keep = checkedPeople().filter(id => company(person(id)?.companyId)?.type === 'Demeisen');
+    f.querySelector('#lg-people').innerHTML = peopleChoices(+coSel.value || null, keep);
+  });
+  if (!ed && logPrefill && company(logPrefill)) { coSel.value = String(logPrefill); coSel.dispatchEvent(new Event('change')); }
+  logPrefill = null;
+  f.querySelector('#lg-cancel')?.addEventListener('click', () => openInteraction(ed.id));
+  f.querySelector('#lg-add-row').addEventListener('click', () => f.querySelector('#lg-actions').insertAdjacentHTML('beforeend', actionInputRow()));
+  f.querySelector('#lg-actions').addEventListener('click', e => { if (e.target.matches('[data-rm-row]')) e.target.closest('.arow').remove(); });
+  f.addEventListener('submit', e => {
+    e.preventDefault();
+    const err = f.querySelector('#lg-err');
+    const type = f.querySelector('input[name="lg-type"]:checked').value;
+    const date = f.querySelector('#lg-date').value;
+    const companyId = +coSel.value || null;
+    const desc = f.querySelector('#lg-desc').value.trim();
+    if (!date) { err.textContent = 'Add the date.'; return; }
+    if (type === 'Interaction' && !companyId) { err.textContent = 'Choose the company this interaction was with.'; coSel.focus(); return; }
+    if (!desc) { err.textContent = 'Add a description.'; f.querySelector('#lg-desc').focus(); return; }
+    const id = ed ? ed.id : nextId(db.interactions);
+    const entry = { id, type, date, companyId, recordedBy: +f.querySelector('#lg-by').value || null, people: checkedPeople(),
+      format: type === 'Interaction' ? f.querySelector('#lg-kind').value : (ed?.format || 'Feedback'), viaId: +f.querySelector('#lg-via').value || null,
+      desc, next: f.querySelector('#lg-next').value.trim(), review: ed ? ed.review : '', updated: new Date().toISOString() };
+    if (ed) Object.assign(ed, entry); else db.interactions.push(entry);
+    // Rows that came from existing actions update them; removed rows delete them; blank rows are ignored.
+    const kept = new Set();
+    let n = 0;
+    f.querySelectorAll('.arow').forEach(r => {
+      const d = r.querySelector('.a-desc').value.trim();
+      if (!d) return;
+      const fields = { desc: d, ownerId: +r.querySelector('.a-owner').value || null, due: r.querySelector('.a-due').value };
+      const old = r.dataset.aid && byId(db.actions, +r.dataset.aid);
+      if (old) { Object.assign(old, fields); kept.add(old.id); }
+      else { db.actions.push({ id: nextId(db.actions), ...fields, interactionId: id, status: 'Open' }); n++; }
+    });
+    const dropped = edActs.filter(a => !kept.has(a.id));
+    if (dropped.length) db.actions = db.actions.filter(a => !dropped.includes(a));
+    save();
+    toast(ed ? 'Entry updated' : `${type} saved${n ? ` with ${n} action${n > 1 ? 's' : ''}` : ''}`);
+    openInteraction(id);
+  });
+}
+
+/* ---------- Shared helpers for Overview & one-pager ---------- */
+const byRecent = (a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id;
+const byDue = (a, b) => (a.due || '9999').localeCompare(b.due || '9999');
+function feedItem(it, showCompany = true, lines = 2) {
+  const co = company(it.companyId);
+  const tag = showCompany ? (co ? `<span class="pill ${tcls(co.type)}">${esc(co.name)}</span>` : '<span class="muted">General</span>')
+    : (it.format ? `<span class="muted">${esc(it.format)}</span>` : '');
+  const by = person(it.recordedBy)?.name;
+  return `<li><button type="button" class="open-int" data-open-int="${it.id}">
+    <span class="row"><span class="mono muted">${fmt(it.date)}</span>${typePill(it.type)}${tag}<span class="by muted" title="Contributed by">${by ? esc(by) : 'unknown'}</span></span>
+    <span class="txt ${lines === 3 ? 'three' : ''}">${esc(it.desc)}</span></button></li>`;
+}
+const agoLabel = s => { const d = -daysFrom(s); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`; };
+
+/* ---------- Overview ---------- */
+function renderHome() {
+  const inLast = n => db.interactions.filter(i => i.date && daysFrom(i.date) <= 0 && daysFrom(i.date) >= -n);
+  const last7 = inLast(7), last30 = inLast(30);
+  const open = db.actions.filter(a => a.status === 'Open');
+  const overdue = open.filter(a => bucket(a) === 'overdue').sort(byDue);
+  const week = open.filter(a => bucket(a) === 'week').sort(byDue);
+  const recent = [...db.interactions].sort(byRecent).slice(0, 10);
+  const counts = {};
+  last30.forEach(i => { if (i.companyId && company(i.companyId)?.type === 'Investor') counts[i.companyId] = (counts[i.companyId] || 0) + 1; });
+  const active = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const split = list => `${list.filter(i => i.type === 'Interaction').length} interactions · ${list.filter(i => i.type === 'Intel').length} intel`;
+  const today = TODAY.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Overview</h1><p class="sub">${today}</p></div>
+      <a class="btn" href="#log">Log interaction / intel</a></div>
+    <div class="stack">
+      <div class="tiles">
+        <a class="panel tile" href="#interactions"><span class="n">${last7.length}</span><span class="lbl">Entries, last 7 days</span><span class="small">${split(last7)}</span></a>
+        <a class="panel tile" href="#interactions"><span class="n">${last30.length}</span><span class="lbl">Entries, last 30 days</span><span class="small">${split(last30)}</span></a>
+        <a class="panel tile ${overdue.length ? 'crit' : ''}" href="#todo"><span class="n">${overdue.length}</span><span class="lbl">Overdue actions</span><span class="small">${week.length} due in next 7 days</span></a>
+        <a class="panel tile" href="#todo"><span class="n">${open.length}</span><span class="lbl">Open actions</span><span class="small">${open.filter(a => !a.due).length} with no due date</span></a>
+      </div>
+      <div class="two-col">
+        <section class="panel">
+          <div class="sec-head"><h2>Latest interactions &amp; intel</h2><a href="#interactions" class="linkbtn">See all</a></div>
+          <ul class="feed">${recent.map(it => feedItem(it)).join('') || '<li class="muted">Nothing logged yet.</li>'}</ul>
+        </section>
+        <div class="stack">
+          <section class="panel">
+            <div class="sec-head"><h2>To-do snapshot</h2><a href="#todo" class="linkbtn">Open to-do</a></div>
+            <div class="sec-head" style="border-bottom:0;padding-bottom:0"><h2 style="color:var(--crit)">Overdue <span class="mono">${overdue.length}</span></h2></div>
+            ${overdue.length ? `<ul class="acts">${overdue.slice(0, 5).map(actionRow).join('')}</ul>` : '<div class="empty">Nothing overdue.</div>'}
+            <div class="sec-head" style="border-bottom:0;padding-bottom:0;border-top:1px solid var(--line)"><h2>Due in next 7 days <span class="mono">${week.length}</span></h2></div>
+            ${week.length ? `<ul class="acts">${week.slice(0, 5).map(actionRow).join('')}</ul>` : '<div class="empty">Nothing due this week.</div>'}
+            ${overdue.length > 5 || week.length > 5 ? '<div class="sec-foot"><a href="#todo" class="linkbtn">More on the to-do list</a></div>' : ''}
+          </section>
+          <section class="panel">
+            <div class="sec-head"><h2>Most active allocators, last 30 days</h2></div>
+            ${active.length ? `<div class="chip-btns">${active.map(([id, n]) => `<button type="button" data-filter-co="${id}">${esc(company(+id).name)}<span class="mono">${n}</span></button>`).join('')}</div>`
+              : '<div class="empty">No investor activity in the last 30 days.</div>'}
+          </section>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ---------- Allocator one-pager ---------- */
+const SHARE_TYPES = [
+  ['Marketing deck', /(sent|send|provid|follow\w* up|includ|shar|request)\w*[^.]{0,40}\bdeck\b|\bdeck\b[^.]{0,25}(sent|provided|duly)|marketing (doc|material)/i],
+  ['Sample portfolio', /sample (portfolio|portfoio|poftfolio|pfo|pro\b)|portfolio snapshot/i],
+  ['Performance / p&l summary', /p&l|performance (summary|stat|numbers)|returns summary|historical returns/i],
+  ['Follow-up document', /follow[- ]?up doc/i],
+  ['BD update', /update on bd|bd update/i],
+  ['References', /\breferences\b/i],
+  ['NDA', /\bNDA\b/],
+  ['Term sheet', /term ?sheet/i],
+];
+let allocId = null;
+function renderAllocator() {
+  if (!allocId || !company(allocId) || company(allocId).type === 'Demeisen') {
+    const latest = [...db.interactions].sort(byRecent).find(i => company(i.companyId)?.type === 'Investor');
+    allocId = latest ? latest.companyId : db.companies.find(c => c.type === 'Investor')?.id || null;
+  }
+  const c = company(allocId);
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Allocator one-pager</h1><p class="sub">Everything on one allocator: contacts, history, what we've shared and what's outstanding.</p></div>
+      <div class="toolbar"><label class="lbl" for="al-co">Allocator</label>
+        <select id="al-co">${companyOpts(allocId)}</select></div></div>
+    <div id="al-body">${c ? allocatorBody(c) : '<div class="panel empty">Add a company to see its one-pager.</div>'}</div>`;
+  view.querySelector('#al-co').addEventListener('change', e => { allocId = +e.target.value; renderAllocator(); });
+}
+function allocatorBody(c) {
+  const isCI = c.type === 'Prime CI';
+  const its = db.interactions.filter(i => i.companyId === c.id || (isCI && i.viaId === c.id)).sort(byRecent);
+  const first = its[its.length - 1], last = its[0];
+  const intro = [...its].reverse().find(i => /intro/i.test(i.format || '')) || first;
+  const introVia = intro?.viaId ? company(intro.viaId) : null;
+  const introBy = intro ? intro.people.map(person).filter(p => p && company(p.companyId)?.type === 'Prime CI').map(p => p.name) : [];
+  const meetings = its.filter(i => /meeting|call/i.test(i.format || '')).length;
+  const itIds = new Set(its.map(i => i.id));
+  const acts = db.actions.filter(a => itIds.has(a.interactionId));
+  const openActs = acts.filter(a => a.status === 'Open').sort(byDue);
+  const intel = its.filter(i => i.type === 'Intel');
+  const contacts = db.people.filter(p => p.companyId === c.id)
+    .map(p => { const mine = its.filter(i => i.people.includes(p.id)); return { p, n: mine.length, last: mine[0]?.date }; })
+    .sort((a, b) => b.n - a.n || a.p.name.localeCompare(b.p.name));
+  const coverage = {};
+  its.forEach(i => i.people.forEach(id => { const p = person(id); if (p && company(p.companyId)?.type === 'Demeisen') coverage[p.name] = (coverage[p.name] || 0) + 1; }));
+  const nextSteps = its.filter(i => i.next).slice(0, 3);
+  const shared = SHARE_TYPES.map(([label, re]) => {
+    const hits = its.filter(i => i.type === 'Interaction' && re.test(`${i.desc} ${i.next}`));
+    return { label, n: hits.length, first: hits[hits.length - 1]?.date, last: hits[0]?.date, lastId: hits[0]?.id };
+  }).filter(s => s.n);
+
+  // activity by month, from first contact to this month
+  let months = [];
+  if (first?.date) {
+    const d = new Date(first.date.slice(0, 7) + '-01T00:00'), end = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+    while (d <= end && months.length < 24) { months.push(iso(d).slice(0, 7)); d.setMonth(d.getMonth() + 1); }
+  }
+  const perMonth = months.map(m => its.filter(i => i.date.startsWith(m)).length);
+  const maxM = Math.max(1, ...perMonth);
+
+  return `<div class="stack">
+    <section class="panel op-head">
+      <div>
+        <h2 class="op-name" style="text-transform:none;letter-spacing:-0.01em;color:var(--ink)">${esc(c.name)}</h2>
+        <div class="op-tags"><span class="pill ${tcls(c.type)}">${esc(c.type)}</span>
+          ${c.investorType ? `<span class="pill ixn">${esc(c.investorType)}</span>` : ''}
+          ${c.investmentType ? `<span class="pill ixn">${esc(c.investmentType)}</span>` : ''}</div>
+        <div class="op-facts">
+          ${intro ? `<span>First contact: <strong>${fmt(intro.date)}</strong>${introVia ? ` via <strong>${esc(introVia.name)}</strong>${introBy.length ? ` (${esc(introBy.join(', '))})` : ''}` : ''}</span>` : ''}
+          ${Object.keys(coverage).length ? `<span>Covered by: <strong>${Object.entries(coverage).sort((a, b) => b[1] - a[1]).map(([n, k]) => `${esc(n)} (${k})`).join(', ')}</strong></span>` : ''}
+          ${c.notes ? `<span>${esc(c.notes)}</span>` : ''}
+        </div>
+      </div>
+      <div class="op-actions">
+        <button type="button" class="btn" data-log-co="${c.id}">Log interaction / intel</button>
+        <button type="button" class="btn ghost" data-ix-co="${c.id}">All entries</button>
+      </div>
+    </section>
+
+    <div class="tiles">
+      <div class="panel tile"><span class="n date">${last ? fmt(last.date) : 'None'}</span><span class="lbl">Last contact</span><span class="small">${last ? agoLabel(last.date) : 'No entries yet'}</span></div>
+      <div class="panel tile"><span class="n">${its.length}</span><span class="lbl">Entries</span><span class="small">${meetings} meetings &amp; calls · ${intel.length} intel</span></div>
+      <div class="panel tile"><span class="n">${contacts.length}</span><span class="lbl">Contacts</span><span class="small">${contacts.filter(x => x.n).length} met or emailed</span></div>
+      <div class="panel tile ${openActs.some(a => bucket(a) === 'overdue') ? 'crit' : ''}"><span class="n">${openActs.length}</span><span class="lbl">Open actions</span><span class="small">${openActs.filter(a => bucket(a) === 'overdue').length} overdue</span></div>
+    </div>
+
+    ${months.length ? `<section class="panel"><div class="sec-head"><h2>Activity by month</h2></div>
+      <div class="months">${months.map((m, k) => `<div class="month"><span class="cnt">${perMonth[k]}</span>
+        <div class="barwrap"><div class="bar ${perMonth[k] ? '' : 'zero'}" style="height:${perMonth[k] ? Math.max(4, perMonth[k] / maxM * 100) : 4}%"></div></div>
+        <span class="m">${new Date(m + '-01T00:00').toLocaleDateString('en-GB', { month: 'short' })}</span></div>`).join('')}</div></section>` : ''}
+
+    <div class="two-col">
+      <div class="stack">
+        <section class="panel">
+          <div class="sec-head"><h2>Most recent ${isCI ? 'activity' : 'interactions'}</h2>${its.length > 6 ? `<button type="button" class="linkbtn" data-ix-co="${c.id}">All ${its.length}</button>` : ''}</div>
+          <ul class="feed">${its.slice(0, 6).map(it => feedItem(it, isCI, 3)).join('') || '<li class="muted">Nothing logged yet.</li>'}</ul>
+        </section>
+        ${intel.length && !isCI ? `<section class="panel"><div class="sec-head"><h2>Intel &amp; feedback</h2></div>
+          <ul class="feed">${intel.slice(0, 5).map(it => feedItem(it, false, 3)).join('')}</ul></section>` : ''}
+      </div>
+      <div class="stack">
+        <section class="panel">
+          <div class="sec-head"><h2>Deliverables</h2><a href="#todo" class="linkbtn">To-do</a></div>
+          ${openActs.length ? `<ul class="acts">${openActs.map(actionRow).join('')}</ul>` : '<div class="empty">No open actions.</div>'}
+          ${nextSteps.length ? `<div class="sec-head" style="border-top:1px solid var(--line)"><h2>Latest next steps</h2></div>
+            <ul class="next-list">${nextSteps.map(i => `<li><span class="mono">${fmt(i.date)}</span>${esc(i.next)}</li>`).join('')}</ul>` : ''}
+        </section>
+        ${!isCI ? `<section class="panel">
+          <div class="sec-head"><h2>Material shared</h2></div>
+          ${shared.length ? `<div class="tbl-wrap"><table class="small-tbl"><thead><tr><th>Item</th><th class="num">Times</th><th>Latest</th></tr></thead>
+            <tbody>${shared.map(s => `<tr><td>${s.label}</td><td class="num">${s.n}</td><td class="mono"><button type="button" class="linkbtn" data-open-int="${s.lastId}">${fmt(s.last)}</button></td></tr>`).join('')}</tbody></table></div>
+            <div class="sec-foot hint">Picked up from the wording of your notes, so check before relying on it.</div>` : '<div class="empty">Nothing detected in the notes yet.</div>'}
+        </section>` : ''}
+        <section class="panel">
+          <div class="sec-head"><h2>Contacts</h2><a href="#people" class="linkbtn">People</a></div>
+          ${contacts.length ? `<div class="tbl-wrap"><table class="small-tbl"><thead><tr><th>Name</th><th class="num">Entries</th><th>Last</th></tr></thead>
+            <tbody>${contacts.map(x => `<tr><td><strong>${esc(x.p.name)}</strong>${x.p.notes ? `<div class="muted" style="font-size:12px">${esc(x.p.notes)}</div>` : ''}</td><td class="num">${x.n}</td><td class="mono">${x.last ? fmt(x.last) : ''}</td></tr>`).join('')}</tbody></table></div>`
+            : '<div class="empty">No contacts recorded.</div>'}
+        </section>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- Interactions list ---------- */
+let ixState = { type: 'all', company: '', open: new Set(), focus: null };
+function openInteraction(id) { ixState = { type: 'all', company: '', open: new Set([id]), focus: id }; goto('interactions'); }
+function ixDetail(it) {
+  const acts = db.actions.filter(a => a.interactionId === it.id);
+  const ppl = it.people.map(person).filter(Boolean);
+  return `<div class="ix-detail">
+    <p>${esc(it.desc)}</p>
+    ${it.next ? `<div class="next"><span class="lbl">Next steps</span><p>${esc(it.next)}</p></div>` : ''}
+    ${ppl.length ? `<div class="chips">${ppl.map(p => `<span class="pill ${tcls(company(p.companyId)?.type)}">${esc(p.name)}</span>`).join('')}</div>` : ''}
+    ${acts.length ? `<div><span class="lbl">Actions</span><ul class="mini">${acts.map(a => `<li><span class="pill ${a.status === 'Open' ? 'open' : 'done'}">${a.status}</span>${esc(a.desc)}<span class="muted">${esc(person(a.ownerId)?.name || '')}${a.due ? ', due ' + fmt(a.due) : ''}</span></li>`).join('')}</ul></div>` : ''}
+    <div class="meta">${it.format ? esc(it.format) + ' · ' : ''}Recorded by ${esc(person(it.recordedBy)?.name || 'unknown')}${it.updated ? ` · updated ${fmt(it.updated.slice(0, 10))}` : ''}</div>
+    ${it.review ? `<div class="review-note">Review: ${esc(it.review)}</div>` : ''}
+    <div><button type="button" class="btn ghost sm" data-edit-int="${it.id}">Update</button></div>
+  </div>`;
+}
+function renderInteractions() {
+  const count = t => db.interactions.filter(i => t === 'all' || i.type === t).length;
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Interactions &amp; intel</h1><p class="sub">Everything logged, newest first. Click a row to see the full entry.</p></div>
+      <a class="btn" href="#log">Log interaction / intel</a></div>
+    <div class="stack">
+      <div class="toolbar">
+        <div class="seg" role="radiogroup" aria-label="Show">
+          ${[['all', 'All'], ['Interaction', 'Interactions'], ['Intel', 'Intel']].map(([v, l]) => `<input type="radio" name="ix-type" id="ix-type-${v}" value="${v}" ${ixState.type === v ? 'checked' : ''}><label for="ix-type-${v}">${l}<span class="mono">${count(v)}</span></label>`).join('')}
+        </div>
+        <label class="lbl" for="ix-co">Company</label>
+        <select id="ix-co"><option value="">All companies</option>${companyOpts(+ixState.company)}</select>
+        <span class="muted" id="ix-count"></span>
+      </div>
+      <div class="panel tbl-wrap"><table class="ix-table">
+        <thead><tr><th>Date</th><th>Type</th><th>Company</th><th>Via</th><th>Their people</th><th>Summary</th><th class="num">Open actions</th></tr></thead>
+        <tbody id="ix-body"></tbody></table></div>
+    </div>`;
+  view.querySelectorAll('input[name="ix-type"]').forEach(r => r.addEventListener('change', () => { ixState.type = r.value; renderIxBody(); }));
+  view.querySelector('#ix-co').addEventListener('change', e => { ixState.company = e.target.value; renderIxBody(); });
+  const body = view.querySelector('#ix-body');
+  const toggle = tr => { const id = +tr.dataset.ix; ixState.open.has(id) ? ixState.open.delete(id) : ixState.open.add(id); renderIxBody(); body.querySelector(`[data-ix="${id}"]`)?.focus(); };
+  body.addEventListener('click', e => {
+    const fc = e.target.closest('[data-filter-co]');
+    if (fc) { e.stopPropagation(); ixState.company = fc.dataset.filterCo; renderInteractions(); return; }
+    const tr = e.target.closest('tr.ix-row');
+    if (tr) toggle(tr);
+  });
+  body.addEventListener('keydown', e => {
+    const tr = e.target.closest('tr.ix-row');
+    if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(tr); }
+  });
+  renderIxBody();
+}
+function renderIxBody() {
+  const rows = db.interactions
+    .filter(i => (ixState.type === 'all' || i.type === ixState.type) && (!ixState.company || i.companyId === +ixState.company))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  view.querySelector('#ix-count').textContent = `${rows.length} shown`;
+  view.querySelector('#ix-body').innerHTML = rows.length ? rows.map(it => {
+    const co = company(it.companyId), via = company(it.viaId);
+    const theirs = it.people.map(person).filter(p => p && company(p.companyId)?.type !== 'Demeisen').map(p => p.name);
+    const open = db.actions.filter(a => a.interactionId === it.id && a.status === 'Open').length;
+    const isOpen = ixState.open.has(it.id);
+    return `<tr class="ix-row ${isOpen ? 'is-open' : ''}" data-ix="${it.id}" tabindex="0" aria-expanded="${isOpen}">
+        <td class="mono nowrap">${fmt(it.date)}</td><td>${typePill(it.type)}</td>
+        <td>${co ? coPill(co) : '<span class="muted">General</span>'}</td>
+        <td>${via ? `<span class="pill ci">${esc(via.name)}</span>` : ''}</td>
+        <td class="ppl">${esc(theirs.join(', '))}</td>
+        <td><div class="clamp">${esc(it.desc)}</div></td>
+        <td class="num">${open || ''}</td></tr>
+      ${isOpen ? `<tr class="ix-open"><td></td><td colspan="6">${ixDetail(it)}</td></tr>` : ''}`;
+  }).join('') : '<tr><td colspan="7" class="muted">No entries match these filters.</td></tr>';
+  if (ixState.focus) {
+    view.querySelector(`[data-ix="${ixState.focus}"]`)?.scrollIntoView({ block: 'center' });
+    ixState.focus = null;
+  }
+}
+
+/* ---------- Search ---------- */
+const blankSearch = () => ({ q: '', type: 'all', company: '', person: '', from: '', to: '', openId: null });
+let ss = blankSearch();
+function hl(text, terms) {
+  let h = esc(text);
+  terms.filter(t => t.length > 1).forEach(t => { h = h.replace(new RegExp('(' + escRe(esc(t)) + ')(?![^<]*>)', 'gi'), '<mark>$1</mark>'); });
+  return h;
+}
+function renderSearch() {
+  const peopleSorted = [...db.people].sort((a, b) => a.name.localeCompare(b.name));
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Search</h1><p class="sub">Every interaction and piece of intel, newest first. Search covers descriptions, next steps, companies and people.</p></div></div>
+    <div class="stack">
+      <div class="panel filters">
+        <div class="field"><label class="lbl" for="s-q">Search</label><input type="search" id="s-q" placeholder="e.g. SMA, DDQ, fees" value="${esc(ss.q)}"></div>
+        <div class="field"><label class="lbl" for="s-type">Type</label><select id="s-type">
+          ${['all', 'Interaction', 'Intel'].map(t => `<option value="${t}" ${ss.type === t ? 'selected' : ''}>${t === 'all' ? 'All' : t}</option>`).join('')}</select></div>
+        <div class="field"><label class="lbl" for="s-co">Company</label><select id="s-co"><option value="">All companies</option>${companyOpts(+ss.company)}</select></div>
+        <div class="field"><label class="lbl" for="s-person">Person</label><select id="s-person"><option value="">Anyone</option>
+          ${peopleSorted.map(p => `<option value="${p.id}" ${+ss.person === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></div>
+        <div class="dates">
+          <div class="field"><label class="lbl" for="s-from">From</label><input type="date" id="s-from" value="${ss.from}"></div>
+          <div class="field"><label class="lbl" for="s-to">To</label><input type="date" id="s-to" value="${ss.to}"></div>
+        </div>
+        <div class="field" style="justify-content:flex-end"><button type="button" class="btn ghost" id="s-clear">Clear filters</button></div>
+      </div>
+      <div class="muted" id="s-count"></div>
+      <div class="results" id="s-results"></div>
+    </div>`;
+  const bind = (id, key) => view.querySelector(id).addEventListener('input', e => { ss[key] = e.target.value; ss.openId = null; renderResults(); });
+  bind('#s-q', 'q'); bind('#s-type', 'type'); bind('#s-co', 'company'); bind('#s-person', 'person'); bind('#s-from', 'from'); bind('#s-to', 'to');
+  view.querySelector('#s-clear').addEventListener('click', () => { ss = blankSearch(); renderSearch(); });
+  renderResults();
+}
+function renderResults() {
+  const terms = ss.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = db.interactions.filter(it => {
+    if (ss.type !== 'all' && it.type !== ss.type) return false;
+    if (ss.company && it.companyId !== +ss.company) return false;
+    if (ss.person && !it.people.includes(+ss.person) && it.recordedBy !== +ss.person) return false;
+    if (ss.from && it.date < ss.from) return false;
+    if (ss.to && it.date > ss.to) return false;
+    if (terms.length) {
+      const hay = [it.desc, it.next, company(it.companyId)?.name, company(it.viaId)?.name, ...it.people.map(id => person(id)?.name)].join(' ').toLowerCase();
+      if (!terms.every(t => hay.includes(t))) return false;
+    }
+    return true;
+  }).sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  view.querySelector('#s-count').textContent = `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`;
+  view.querySelector('#s-results').innerHTML = rows.length ? rows.map(it => {
+    const co = it.companyId ? company(it.companyId) : null;
+    const acts = db.actions.filter(a => a.interactionId === it.id);
+    const ppl = it.people.map(person).filter(Boolean);
+    return `<article class="panel ix" id="ix-${it.id}">
+      <div class="ix-head"><span class="mono">${fmt(it.date)}</span>${typePill(it.type)}${it.format ? `<span class="muted">${esc(it.format)}</span>` : ''}
+        ${co ? coPill(co) : '<span class="muted">General market colour</span>'}
+        ${it.viaId && company(it.viaId) ? `<span class="muted">via</span><span class="pill ci">${esc(company(it.viaId).name)}</span>` : ''}
+        <span class="muted">Recorded by ${esc(person(it.recordedBy)?.name || 'unknown')}</span></div>
+      ${it.review ? `<div class="review-note">Review: ${esc(it.review)}</div>` : ''}
+      <p>${hl(it.desc, terms)}</p>
+      ${it.next ? `<div class="next"><span class="lbl">Next steps</span><p>${hl(it.next, terms)}</p></div>` : ''}
+      ${ppl.length ? `<div class="chips">${ppl.map(p => `<span class="pill ${tcls(company(p.companyId)?.type)}">${hl(p.name, terms)}</span>`).join('')}</div>` : ''}
+      ${acts.length ? `<div><span class="lbl">Actions</span><ul class="mini">${acts.map(a => `<li><span class="pill ${a.status === 'Open' ? 'open' : 'done'}">${a.status}</span>${esc(a.desc)}<span class="muted">${esc(person(a.ownerId)?.name || '')}${a.due ? ', due ' + fmt(a.due) : ''}</span></li>`).join('')}</ul></div>` : ''}
+    </article>`;
+  }).join('') : '<div class="panel empty">No entries match. Try fewer words or clear the filters.</div>';
+  if (ss.openId) {
+    const el = view.querySelector('#ix-' + ss.openId);
+    if (el) { el.classList.add('flash'); el.scrollIntoView({ block: 'center' }); }
+  }
+}
+
+/* ---------- Companies ---------- */
+let coEdit = null;
+function renderCompanies() {
+  const stats = c => {
+    const its = db.interactions.filter(i => i.companyId === c.id);
+    const last = its.map(i => i.date).sort().pop();
+    const open = db.actions.filter(a => a.status === 'Open' && its.some(i => i.id === a.interactionId)).length;
+    return { people: db.people.filter(p => p.companyId === c.id).length, last, open };
+  };
+  const order = { 'Investor': 0, 'Prime CI': 1, 'Other': 2, 'Demeisen': 3 };
+  const rows = [...db.companies].sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || a.name.localeCompare(b.name));
+  const editing = coEdit === 'new' ? { id: null, type: 'Investor', name: '', investorType: '', investmentType: '', notes: '' } : coEdit ? company(coEdit) : null;
+  const distinct = k => [...new Set(db.companies.map(c => c[k]).filter(Boolean))].sort();
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Companies</h1><p class="sub">Investors, prime broker cap intro desks, and Demeisen itself.</p></div>
+      <button type="button" class="btn" id="co-new">Add company</button></div>
+    <div class="stack">
+      ${editing ? `<form class="panel edit-panel" id="co-form">
+        <h2>${editing.id ? 'Edit ' + esc(editing.name) : 'New company'}</h2>
+        <div class="fgrid">
+          <div class="field"><label class="lbl" for="co-type">Company type</label><select id="co-type">
+            ${COMPANY_TYPES.map(t => `<option ${editing.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+          <div class="field"><label class="lbl" for="co-name">Company name</label><input type="text" id="co-name" value="${esc(editing.name)}"></div>
+          <div class="field"><label class="lbl" for="co-invtype">Investor type</label><input type="text" id="co-invtype" list="co-invtype-list" value="${esc(editing.investorType)}" placeholder="e.g. Pension, Endowment">
+            <datalist id="co-invtype-list">${distinct('investorType').map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
+          <div class="field"><label class="lbl" for="co-inv">Investment type</label><input type="text" id="co-inv" list="co-inv-list" value="${esc(editing.investmentType)}" placeholder="e.g. SMA, Co-Mingled">
+            <datalist id="co-inv-list">${distinct('investmentType').map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
+          <div class="field span-all"><label class="lbl" for="co-notes">Notes <em>(optional)</em></label><textarea id="co-notes" rows="2">${esc(editing.notes)}</textarea></div>
+        </div>
+        <div class="form-actions"><button class="btn" type="submit">Save company</button><button type="button" class="btn ghost" id="co-cancel">Cancel</button><span class="form-error" id="co-err" role="alert"></span></div>
+      </form>` : ''}
+      <div class="panel tbl-wrap"><table>
+        <thead><tr><th>Company</th><th>Type</th><th>Investor type</th><th>Investment type</th><th class="num">People</th><th>Last contact</th><th class="num">Open actions</th><th></th></tr></thead>
+        <tbody>${rows.map(c => { const s = stats(c); return `<tr>
+          <td><strong>${esc(c.name)}</strong></td><td><span class="pill ${tcls(c.type)}">${esc(c.type)}</span></td><td>${esc(c.investorType)}</td><td>${esc(c.investmentType)}</td>
+          <td class="num">${s.people}</td><td class="mono">${s.last ? fmt(s.last) : '<span class="muted">None</span>'}</td><td class="num">${s.open}</td>
+          <td style="white-space:nowrap;text-align:right">${c.type !== 'Demeisen' ? `<button type="button" class="btn ghost sm" data-filter-co="${c.id}">One-pager</button>` : ''}<button type="button" class="btn ghost sm" data-co-edit="${c.id}">Edit</button></td></tr>`; }).join('')}
+        </tbody></table></div>
+    </div>`;
+  view.querySelector('#co-new').addEventListener('click', () => { coEdit = 'new'; renderCompanies(); view.querySelector('#co-name').focus(); });
+  view.querySelectorAll('[data-co-edit]').forEach(b => b.addEventListener('click', () => { coEdit = +b.dataset.coEdit; renderCompanies(); window.scrollTo(0, 0); }));
+  if (editing) {
+    view.querySelector('#co-cancel').addEventListener('click', () => { coEdit = null; renderCompanies(); });
+    view.querySelector('#co-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const name = view.querySelector('#co-name').value.trim();
+      const err = view.querySelector('#co-err');
+      if (!name) { err.textContent = 'Add the company name.'; return; }
+      if (db.companies.some(c => c.name.toLowerCase() === name.toLowerCase() && c.id !== editing.id)) { err.textContent = `${name} already exists.`; return; }
+      const rec = { type: view.querySelector('#co-type').value, name, investorType: view.querySelector('#co-invtype').value.trim(),
+        investmentType: view.querySelector('#co-inv').value.trim(), notes: view.querySelector('#co-notes').value.trim() };
+      if (editing.id) Object.assign(company(editing.id), rec); else db.companies.push({ id: nextId(db.companies), ...rec });
+      save(); coEdit = null; renderCompanies(); toast(`${name} saved`);
+    });
+  }
+}
+
+/* ---------- People ---------- */
+let peEdit = null, peFilter = '';
+function renderPeople() {
+  const editing = peEdit === 'new' ? { id: null, name: '', email: '', companyId: +peFilter || null, title: '', phone: '' } : peEdit ? person(peEdit) : null;
+  const rows = db.people.filter(p => !peFilter || p.companyId === +peFilter)
+    .sort((a, b) => (company(a.companyId)?.name || '').localeCompare(company(b.companyId)?.name || '') || a.name.localeCompare(b.name));
+  const emailOk = e => !e || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>People</h1><p class="sub">Everyone you deal with, each linked to one company. Demeisen staff are people too.</p></div>
+      <div class="toolbar"><label class="lbl" for="pe-filter">Company</label>
+        <select id="pe-filter"><option value="">All companies</option>${companyOpts(+peFilter, { excludeDemeisen: false })}</select>
+        <button type="button" class="btn" id="pe-new">Add person</button></div></div>
+    <div class="stack">
+      ${editing ? `<form class="panel edit-panel" id="pe-form">
+        <h2>${editing.id ? 'Edit ' + esc(editing.name) : 'New person'}</h2>
+        <div class="fgrid">
+          <div class="field"><label class="lbl" for="pe-name">Name</label><input type="text" id="pe-name" value="${esc(editing.name)}"></div>
+          <div class="field"><label class="lbl" for="pe-email">Email</label><input type="email" id="pe-email" value="${esc(editing.email)}"></div>
+          <div class="field"><label class="lbl" for="pe-co">Company</label><select id="pe-co"><option value="">Choose a company</option>${companyOpts(editing.companyId, { excludeDemeisen: false })}</select></div>
+          <div class="field"><label class="lbl" for="pe-title">Job title <em>(optional)</em></label><input type="text" id="pe-title" value="${esc(editing.title)}"></div>
+          <div class="field"><label class="lbl" for="pe-phone">Phone <em>(optional)</em></label><input type="tel" id="pe-phone" value="${esc(editing.phone)}"></div>
+        </div>
+        <div class="form-actions"><button class="btn" type="submit">Save person</button><button type="button" class="btn ghost" id="pe-cancel">Cancel</button><span class="form-error" id="pe-err" role="alert"></span></div>
+      </form>` : ''}
+      <div class="panel tbl-wrap"><table>
+        <thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Job title</th><th class="num">Interactions</th><th></th></tr></thead>
+        <tbody>${rows.length ? rows.map(p => { const c = company(p.companyId); return `<tr>
+          <td><strong>${esc(p.name)}</strong></td>
+          <td class="mono">${esc(p.email)}${emailOk(p.email) ? '' : '<span class="warn-note">check domain</span>'}</td>
+          <td>${c ? `<span class="pill ${tcls(c.type)}">${esc(c.name)}</span>` : '<span class="muted">None</span>'}</td><td>${esc(p.title)}</td>
+          <td class="num">${db.interactions.filter(i => i.people.includes(p.id)).length}</td>
+          <td style="text-align:right"><button type="button" class="btn ghost sm" data-pe-edit="${p.id}">Edit</button></td></tr>`; }).join('')
+          : '<tr><td colspan="6" class="muted">No people for this company yet.</td></tr>'}
+        </tbody></table></div>
+    </div>`;
+  view.querySelector('#pe-filter').addEventListener('change', e => { peFilter = e.target.value; renderPeople(); });
+  view.querySelector('#pe-new').addEventListener('click', () => { peEdit = 'new'; renderPeople(); view.querySelector('#pe-name').focus(); });
+  view.querySelectorAll('[data-pe-edit]').forEach(b => b.addEventListener('click', () => { peEdit = +b.dataset.peEdit; renderPeople(); window.scrollTo(0, 0); }));
+  if (editing) {
+    view.querySelector('#pe-cancel').addEventListener('click', () => { peEdit = null; renderPeople(); });
+    view.querySelector('#pe-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const err = view.querySelector('#pe-err');
+      const name = view.querySelector('#pe-name').value.trim();
+      const email = view.querySelector('#pe-email').value.trim();
+      const companyId = +view.querySelector('#pe-co').value;
+      if (!name) { err.textContent = 'Add the person’s name.'; return; }
+      if (!companyId) { err.textContent = 'Choose which company they work at.'; return; }
+      if (email && db.people.some(p => p.email.toLowerCase() === email.toLowerCase() && p.id !== editing.id)) { err.textContent = 'Another person already has that email.'; return; }
+      const rec = { name, email, companyId, title: view.querySelector('#pe-title').value.trim(), phone: view.querySelector('#pe-phone').value.trim() };
+      if (editing.id) Object.assign(person(editing.id), rec); else db.people.push({ id: nextId(db.people), ...rec });
+      save(); peEdit = null; renderPeople(); toast(`${name} saved`);
+    });
+  }
+}
+
+/* ---------- Shared clicks ---------- */
+view.addEventListener('click', e => {
+  const open = e.target.closest('[data-open-int]');
+  if (open) { e.preventDefault(); openInteraction(+open.dataset.openInt); return; }
+  const fc = e.target.closest('[data-filter-co]');
+  if (fc) { e.preventDefault(); allocId = +fc.dataset.filterCo; goto('allocator'); return; }
+  const ixc = e.target.closest('[data-ix-co]');
+  if (ixc) { e.preventDefault(); ixState = { type: 'all', company: ixc.dataset.ixCo, open: new Set(), focus: null }; goto('interactions'); return; }
+  const lg = e.target.closest('[data-log-co]');
+  if (lg) { e.preventDefault(); logPrefill = +lg.dataset.logCo; goto('log'); return; }
+  const ed = e.target.closest('[data-edit-int]');
+  if (ed) { e.preventDefault(); logEdit = +ed.dataset.editInt; goto('log'); }
+});
+view.addEventListener('change', e => {
+  if (!e.target.matches('[data-act]')) return;
+  const a = byId(db.actions, +e.target.dataset.act);
+  a.status = e.target.checked ? 'Done' : 'Open';
+  const y = window.scrollY;
+  save(); toast(a.status === 'Done' ? 'Marked done' : 'Reopened'); route(); window.scrollTo(0, y);
+});
+/* ---------- Workbook import (runs in this browser only; nothing is uploaded) ---------- */
+const str = v => String(v ?? '').trim();
+const lc = v => str(v).toLowerCase();
+function readSheet(wb, name) {
+  const key = wb.SheetNames.find(n => lc(n) === lc(name));
+  if (!key) throw new Error(`The workbook has no "${name}" tab. It needs Company, Person, Interaction and Action tabs.`);
+  return XLSX.utils.sheet_to_json(wb.Sheets[key], { defval: '', raw: true });
+}
+function col(row, ...names) {
+  for (const n of names) {
+    const k = Object.keys(row).find(h => lc(h) === lc(n));
+    if (k !== undefined && str(row[k]) !== '') return row[k];
+  }
+  return '';
+}
+function xlDate(v) {
+  if (v === '' || v == null) return '';
+  if (typeof v === 'number') return new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0, 10);
+  const s = str(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const p = new Date(s);
+  return isNaN(p) ? '' : iso(p);
+}
+function importWorkbook(buf, filename) {
+  const wb = XLSX.read(buf, { type: 'array' });
+  const warn = [];
+  const typeOf = t => COMPANY_TYPES.find(x => lc(x) === lc(t)) || (t ? 'Other' : 'Investor');
+
+  const companies = [];
+  readSheet(wb, 'Company').forEach((r, i) => {
+    const name = str(col(r, 'Company Name'));
+    if (!name) return;
+    const t = str(col(r, 'Company Type'));
+    if (t && !COMPANY_TYPES.some(x => lc(x) === lc(t))) warn.push(`Company "${name}": type "${t}" not recognised, shown as Other.`);
+    companies.push({ id: +col(r, 'Company ID') || 100000 + i, type: typeOf(t), name,
+      investorType: str(col(r, 'Investor Type')), investmentType: str(col(r, 'Investment Type')), notes: str(col(r, 'Notes')) });
+  });
+  const coByName = new Map(companies.map(c => [lc(c.name), c]));
+  if (!companies.some(c => c.type === 'Demeisen')) warn.push('No company has type Demeisen, so owners and "Recorded by" lists will be empty.');
+
+  const people = [];
+  readSheet(wb, 'Person').forEach((r, i) => {
+    const name = str(col(r, 'Person Name'));
+    if (!name) return;
+    const coName = str(col(r, 'Company Name'));
+    const co = coByName.get(lc(coName));
+    if (!co) { warn.push(`Person "${name}" skipped: company "${coName}" is not on the Company tab.`); return; }
+    people.push({ id: +col(r, 'Person ID') || 100000 + i, name, email: str(col(r, 'Person Email')), companyId: co.id,
+      title: str(col(r, 'Title', 'Job Title')), phone: str(col(r, 'Phone')), notes: str(col(r, 'Notes')) });
+  });
+  const pByName = new Map(people.map(p => [lc(p.name), p]));
+
+  const interactions = [];
+  readSheet(wb, 'Interaction').forEach((r, i) => {
+    const desc = str(col(r, 'Interaction Desc'));
+    const id = +col(r, 'Interaction ID') || 100000 + i;
+    if (!desc && !str(col(r, 'Company Name'))) return;
+    const coName = str(col(r, 'Company Name'));
+    const co = coByName.get(lc(coName));
+    if (coName && !co) warn.push(`Interaction ${id}: company "${coName}" is not on the Company tab.`);
+    const viaName = str(col(r, 'Via (Prime CI)', 'Via'));
+    const via = coByName.get(lc(viaName));
+    if (viaName && !via) warn.push(`Interaction ${id}: via "${viaName}" is not on the Company tab.`);
+    const ids = [];
+    str(col(r, 'People Involved')).split(/[;\n]/).map(s => s.trim()).filter(Boolean).forEach(n => {
+      const p = pByName.get(lc(n));
+      if (p) { if (!ids.includes(p.id)) ids.push(p.id); } else warn.push(`Interaction ${id}: "${n}" is not on the Person tab.`);
+    });
+    const rbName = str(col(r, 'Recorded By'));
+    const rb = pByName.get(lc(rbName));
+    if (rbName && !rb) warn.push(`Interaction ${id}: recorded by "${rbName}" is not on the Person tab.`);
+    const date = xlDate(col(r, 'Interaction Date'));
+    if (!date) warn.push(`Interaction ${id}: no date.`);
+    const lu = col(r, 'Last Updated');
+    let upd = '';
+    if (typeof lu === 'number') { const u = new Date(Math.round((lu - 25569) * 864e5)); upd = new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(), u.getUTCHours(), u.getUTCMinutes()).toISOString(); }
+    interactions.push({ id, type: /intel/i.test(str(col(r, 'Entry Type'))) ? 'Intel' : 'Interaction', date,
+      companyId: co ? co.id : null, viaId: via ? via.id : null, format: str(col(r, 'Format')), people: ids,
+      recordedBy: rb ? rb.id : null, desc, next: str(col(r, 'Interaction Next Steps')), review: str(col(r, 'Review')),
+      ...(upd ? { updated: upd } : {}) });
+  });
+  const ixIds = new Set(interactions.map(x => x.id));
+
+  const actions = [];
+  readSheet(wb, 'Action').forEach((r, i) => {
+    const desc = str(col(r, 'Action Desc'));
+    if (!desc) return;
+    const id = +col(r, 'Action ID') || 100000 + i;
+    const ownerName = str(col(r, 'Owner'));
+    const owner = pByName.get(lc(ownerName));
+    if (ownerName && !owner) warn.push(`Action ${id}: owner "${ownerName}" is not on the Person tab.`);
+    let interactionId = +col(r, 'Interaction ID') || null;
+    if (interactionId && !ixIds.has(interactionId)) { warn.push(`Action ${id}: interaction ${interactionId} not found.`); interactionId = null; }
+    const st = lc(col(r, 'Status'));
+    actions.push({ id, desc, due: xlDate(col(r, 'Action Due Date')), ownerId: owner ? owner.id : null, interactionId,
+      status: st === 'done' ? 'Done' : st === 'cancelled' || st === 'canceled' ? 'Cancelled' : 'Open', review: str(col(r, 'Review')) });
+  });
+
+  return { companies, people, interactions, actions,
+    meta: { source: filename, loadedAt: new Date().toISOString(), warnings: warn } };
+}
+
+function renderStatus() {
+  const el = document.getElementById('data-status');
+  const m = db.meta;
+  if (!m || !m.source) { el.innerHTML = `<strong>Pro-forma</strong>Example data. Import your workbook to load your own; it stays in this browser only.${m?.changes ? ` <span class="unsaved">${m.changes} unsaved change${m.changes > 1 ? 's' : ''}</span>` : ''}`; return; }
+  const when = new Date(m.loadedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  el.innerHTML = `<strong>Your data</strong>Loaded from ${esc(m.source)} on ${when}: ${db.companies.length} companies, ${db.people.length} people, ${db.interactions.length} entries, ${db.actions.length} actions. Stored in this browser only.
+    ${m.changes ? `<span class="unsaved">${m.changes} change${m.changes > 1 ? 's' : ''} not yet in a workbook. Use Save workbook.</span>` : m.savedAs ? `<span class="muted">Last saved to ${esc(m.savedAs)}.</span>` : ''}
+    ${m.warnings.length ? `<details><summary>${m.warnings.length} item${m.warnings.length > 1 ? 's' : ''} could not be matched</summary><ul>${m.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></details>` : ''}`;
+}
+document.getElementById('import-file').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { toast('The spreadsheet reader did not load. Check your connection and reload.'); return; }
+  try {
+    const next = importWorkbook(await file.arrayBuffer(), file.name);
+    if (!next.companies.length) { toast('No companies found on the Company tab.'); return; }
+    db = next; ss = blankSearch(); todoOwner = 'all';
+    const stored = save(false);
+    renderStatus(); route();
+    toast(stored ? `Loaded ${db.interactions.length} entries from ${file.name}` : 'Loaded, but this browser would not store it; it will be lost on reload.');
+  } catch (err) { toast(err.message || 'That file could not be read.'); }
+});
+/* ---------- Workbook export: same tabs and headers as the import, so a saved file loads straight back in ---------- */
+// Excel date serials written directly, so no time-zone shift can move a date by a day.
+const xd = s => s ? Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 864e5 + 25569 : '';
+const xdt = s => { if (!s) return ''; const d = new Date(s); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()) / 864e5 + 25569; };
+function buildWorkbook() {
+  const coName = id => company(id)?.name || '';
+  const pName = id => person(id)?.name || '';
+  const DATE_FMT = { 'Interaction Date': 'dd-mmm-yyyy', 'Action Due Date': 'dd-mmm-yyyy', 'Last Updated': 'dd-mmm-yyyy hh:mm' };
+  const sheet = (rows, widths) => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const z = DATE_FMT[ws[XLSX.utils.encode_cell({ r: 0, c })]?.v];
+      if (z) for (let r = 1; r <= range.e.r; r++) { const cell = ws[XLSX.utils.encode_cell({ r, c })]; if (cell && cell.t === 'n') cell.z = z; }
+    }
+    ws['!cols'] = widths.map(w => ({ wch: w }));
+    return ws;
+  };
+  const sortId = arr => [...arr].sort((a, b) => a.id - b.id);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet(sortId(db.companies).map(c => ({ 'Company ID': c.id, 'Company Type': c.type, 'Company Name': c.name,
+    'Investor Type': c.investorType || '', 'Investment Type': c.investmentType || '', 'Notes': c.notes || '' })), [11, 13, 36, 18, 18, 60]), 'Company');
+  XLSX.utils.book_append_sheet(wb, sheet(sortId(db.people).map(p => ({ 'Person ID': p.id, 'Person Name': p.name, 'Person Email': p.email || '',
+    'Company Name': coName(p.companyId), 'Title': p.title || '', 'Phone': p.phone || '', 'Notes': p.notes || '' })), [10, 26, 32, 34, 20, 16, 46]), 'Person');
+  XLSX.utils.book_append_sheet(wb, sheet([...db.interactions].sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id - b.id).map(i => ({
+    'Interaction ID': i.id, 'Entry Type': i.type, 'Interaction Date': xd(i.date), 'Company Name': coName(i.companyId), 'Format': i.format || '',
+    'Via (Prime CI)': coName(i.viaId), 'People Involved': i.people.map(pName).filter(Boolean).join('; '), 'Interaction Desc': i.desc,
+    'Interaction Next Steps': i.next || '', 'Recorded By': pName(i.recordedBy), 'Review': i.review || '',
+    'Last Updated': xdt(i.updated) })), [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18]), 'Interaction');
+  XLSX.utils.book_append_sheet(wb, sheet(sortId(db.actions).map(a => ({ 'Action ID': a.id, 'Action Desc': a.desc, 'Action Due Date': xd(a.due),
+    'Status': a.status, 'Owner': pName(a.ownerId), 'Interaction ID': a.interactionId || '',
+    'Company': coName(byId(db.interactions, a.interactionId)?.companyId), 'Review': a.review || '' })), [10, 62, 15, 10, 15, 13, 30, 40]), 'Action');
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+}
+document.getElementById('export').addEventListener('click', async () => {
+  if (typeof XLSX === 'undefined') { toast('The spreadsheet reader did not load. Check your connection and reload.'); return; }
+  const name = `Demeisen CRM ${iso(new Date())}.xlsx`;
+  const blob = new Blob([buildWorkbook()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  let savedAs = name;
+  try {
+    if (window.showSaveFilePicker) {
+      // Chrome and Edge: lets you pick the folder and name, or choose an existing workbook to replace.
+      const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Excel workbook', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close(); savedAs = h.name;
+    } else {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    toast('This page is not allowed to save files here. Open the copy saved on your computer instead.'); return;
+  }
+  db.meta = db.meta || { source: '', loadedAt: new Date().toISOString(), warnings: [] };
+  db.meta.changes = 0; db.meta.savedAs = savedAs; save(false);
+  toast(`Saved ${savedAs}`);
+});
+const resetBtn = document.getElementById('reset');
+let resetArmed = false;
+resetBtn.addEventListener('click', () => {
+  if (!resetArmed) { resetArmed = true; resetBtn.textContent = 'Click again: replaces loaded data'; setTimeout(() => { resetArmed = false; resetBtn.textContent = 'Reset to example data'; }, 4000); return; }
+  db = seed(); save(false); resetArmed = false; resetBtn.textContent = 'Reset to example data'; ss = blankSearch(); renderStatus(); route(); toast('Example data restored');
+});
+renderStatus();
+route();
+</script>
+</body>
+</html>
