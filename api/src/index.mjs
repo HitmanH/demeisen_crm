@@ -5,6 +5,7 @@ import mysql from 'mysql2/promise';
 import { Signer } from '@aws-sdk/rds-signer';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { toCsv } from './csv.mjs';
+import { buildWorkbook } from './workbook.mjs';
 import { HttpError, cleanInt, cleanText, cleanDate, oneOf, cleanIds } from './validate.mjs';
 
 const { DB_HOST, DB_USER, BACKUP_BUCKET, AWS_REGION } = process.env;
@@ -167,7 +168,7 @@ async function handleApi(event) {
   }
 }
 
-/* ---------- Nightly CSV backup: every table, plus a manifest with counts ---------- */
+/* ---------- Nightly backup: every table as CSV, a workbook that can seed an empty database, and a manifest with counts ---------- */
 export const BACKUP_TABLES = ['company', 'person', 'interaction', 'interaction_person', 'action',
   'company_history', 'person_history', 'interaction_history', 'interaction_person_history', 'action_history'];
 
@@ -178,6 +179,7 @@ async function runBackup() {
   const put = (Key, Body, ContentType) => s3.send(new PutObjectCommand({ Bucket: BACKUP_BUCKET, Key, Body, ContentType, ChecksumAlgorithm: 'CRC32' }));
   const c = await connect();
   const manifest = { exportedAt: stamp, files: {} };
+  let data;
   try {
     await c.query('START TRANSACTION WITH CONSISTENT SNAPSHOT');
     for (const t of BACKUP_TABLES) {
@@ -185,10 +187,18 @@ async function runBackup() {
       await put(`${prefix}${t}.csv`, toCsv(fields.map(f => f.name), rows), 'text/csv; charset=utf-8');
       manifest.files[t] = rows.length;
     }
+    data = await getData(c);
     await c.commit();
   } finally { await c.end().catch(() => {}); }
+  // The CSVs and manifest are still saved if the workbook fails; the error then triggers the alarm.
+  let workbookError;
+  try {
+    manifest.workbook = `Demeisen CRM ${stamp.slice(0, 10)}.xlsx`;
+    await put(prefix + manifest.workbook, buildWorkbook(data), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  } catch (e) { workbookError = e; delete manifest.workbook; }
   await put(`${prefix}manifest.json`, JSON.stringify(manifest, null, 2), 'application/json');
   console.log('backup complete', prefix, JSON.stringify(manifest.files));
+  if (workbookError) throw workbookError;
   return manifest;
 }
 

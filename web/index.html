@@ -1347,10 +1347,10 @@ function buildWorkbook() {
     'Interaction ID': i.id, 'Entry Type': i.type, 'Interaction Date': xd(i.date), 'Company Name': coName(i.companyId), 'Format': i.format || '',
     'Via (Prime CI)': coName(i.viaId), 'People Involved': i.people.map(pName).filter(Boolean).join('; '), 'Interaction Desc': i.desc,
     'Interaction Next Steps': i.next || '', 'Recorded By': pName(i.recordedBy), 'Review': i.review || '',
-    'Last Updated': xdt(i.updated) })), [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18]), 'Interaction');
+    'Last Updated': xdt(i.updated), 'People Involved IDs': i.people.join('; '), 'Recorded By ID': i.recordedBy || '' })), [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18, 16, 12]), 'Interaction');
   XLSX.utils.book_append_sheet(wb, sheet(sortId(db.actions).map(a => ({ 'Action ID': a.id, 'Action Desc': a.desc, 'Action Due Date': xd(a.due),
     'Status': a.status, 'Owner': pName(a.ownerId), 'Interaction ID': a.interactionId || '',
-    'Company': coName(byId(db.interactions, a.interactionId)?.companyId), 'Review': a.review || '' })), [10, 62, 15, 10, 15, 13, 30, 40]), 'Action');
+    'Company': coName(byId(db.interactions, a.interactionId)?.companyId), 'Review': a.review || '', 'Owner ID': a.ownerId || '' })), [10, 62, 15, 10, 15, 13, 30, 40, 10]), 'Action');
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
 document.getElementById('export').addEventListener('click', async () => {
