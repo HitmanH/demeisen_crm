@@ -14,6 +14,8 @@ Parameters:
   DbUser: { Type: String, Default: crm_app }
   AuthDomainPrefix: { Type: String, Default: demeisen-crm-poc }
   BackupRetentionDays: { Type: Number, Default: 90 }
+  AlertEmail: { Type: String, Description: Address for budget and backup alerts }
+  GitHubRepo: { Type: String, Default: HitmanH/demeisen_crm }
 
 Resources:
   # ---------- Sign-in: invited users only, MFA required ----------
@@ -276,6 +278,96 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - { Effect: Allow, Action: 'lambda:InvokeFunction', Resource: !GetAtt Function.Arn }
+
+  # ---------- Alerts ----------
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Properties:
+      Budget:
+        BudgetName: demeisen-crm-monthly
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit: { Amount: 50, Unit: USD }
+      NotificationsWithSubscribers:
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 25, ThresholdType: ABSOLUTE_VALUE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+        - Notification: { NotificationType: ACTUAL, ComparisonOperator: GREATER_THAN, Threshold: 50, ThresholdType: ABSOLUTE_VALUE }
+          Subscribers: [{ SubscriptionType: EMAIL, Address: !Ref AlertEmail }]
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties: { TopicName: demeisen-crm-poc-alerts }
+  AlertSubscription:
+    Type: AWS::SNS::Subscription
+    Properties: { TopicArn: !Ref AlertTopic, Protocol: email, Endpoint: !Ref AlertEmail }
+  BackupCompletedMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref FunctionLogs
+      FilterPattern: '"backup complete"'
+      MetricTransformations:
+        - { MetricNamespace: DemeisenCRM, MetricName: BackupCompleted, MetricValue: '1', DefaultValue: 0 }
+  BackupMissingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: demeisen-crm-poc-backup-missing
+      AlarmDescription: No CRM backup completed in the last day
+      Namespace: DemeisenCRM
+      MetricName: BackupCompleted
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions: [!Ref AlertTopic]
+  FunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: demeisen-crm-poc-function-errors
+      AlarmDescription: The CRM function failed, which includes a failed backup
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{ Name: FunctionName, Value: !Ref Function }]
+      Statistic: Sum
+      Period: 3600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlertTopic]
+
+  # ---------- Automatic deployment from GitHub: code and page only, main branch only ----------
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: demeisen-crm-github-deploy
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Federated: !Ref GitHubOidcProvider }
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:ref:refs/heads/main'
+      Policies:
+        - PolicyName: deploy-code-and-page
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [lambda:UpdateFunctionCode, lambda:GetFunctionConfiguration]
+                Resource: !GetAtt Function.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${SiteBucket.Arn}/index.html'
 
 Outputs:
   SiteUrl: { Value: !Sub 'https://${Distribution.DomainName}/' }
