@@ -59,6 +59,14 @@ function interactionFields(b) {
 function actionFields(b) {
   return { description: cleanText(b.desc, 1000, 'action', true), due_date: cleanDate(b.due, 'due date'), owner_person_id: cleanInt(b.ownerId, 'owner') };
 }
+function pairingFields(b) {
+  return { allocator_company_id: cleanInt(b.allocatorId, 'allocator', true), counterparty_company_id: cleanInt(b.counterpartyId, 'Prime CI', true),
+    connection_type: cleanText(b.connection, 50, 'connection', true) };
+}
+const pairingWrite = async fn => {
+  try { return await fn(); }
+  catch (e) { if (e.errno === 1062) throw new HttpError(409, 'That pairing already exists.'); throw e; }
+};
 const insert = async (c, table, f) => {
   const k = Object.keys(f);
   const [r] = await c.query(`INSERT INTO ${table} (${k.join(', ')}) VALUES (${k.map(() => '?').join(', ')})`, k.map(x => f[x]));
@@ -67,10 +75,11 @@ const insert = async (c, table, f) => {
 
 /* ---------- Reads ---------- */
 async function getData(c) {
-  const [[companies], [people], [interactions], [links], [actions], [edited]] = await Promise.all([
+  const [[companies], [people], [interactions], [links], [actions], [edited], [pairings]] = await Promise.all([
     c.query('SELECT * FROM company'), c.query('SELECT * FROM person'), c.query('SELECT * FROM interaction'),
     c.query('SELECT interaction_id, person_id FROM interaction_person'), c.query('SELECT * FROM action'),
-    c.query("SELECT DISTINCT interaction_id FROM interaction_history WHERE operation = 'UPDATE'")
+    c.query("SELECT DISTINCT interaction_id FROM interaction_history WHERE operation = 'UPDATE'"),
+    c.query('SELECT * FROM counterparty_pairing')
   ]);
   const byIx = new Map();
   links.forEach(l => { if (!byIx.has(l.interaction_id)) byIx.set(l.interaction_id, []); byIx.get(l.interaction_id).push(l.person_id); });
@@ -81,7 +90,8 @@ async function getData(c) {
     interactions: interactions.map(x => ({ id: x.interaction_id, type: x.entry_type, date: x.interaction_date, companyId: x.company_id, viaId: x.via_company_id, format: x.format || '',
       people: byIx.get(x.interaction_id) || [], recordedBy: x.recorded_by_person_id, desc: x.description, next: x.next_steps || '', review: x.review || '', validFrom: x.valid_from,
       ...(wasEdited.has(x.interaction_id) ? { updated: x.valid_from.replace(' ', 'T') + 'Z' } : {}) })),
-    actions: actions.map(x => ({ id: x.action_id, desc: x.description, due: x.due_date || '', ownerId: x.owner_person_id, interactionId: x.interaction_id, status: x.status, review: x.review || '', validFrom: x.valid_from }))
+    actions: actions.map(x => ({ id: x.action_id, desc: x.description, due: x.due_date || '', ownerId: x.owner_person_id, interactionId: x.interaction_id, status: x.status, review: x.review || '', validFrom: x.valid_from })),
+    pairings: pairings.map(x => ({ id: x.pairing_id, allocatorId: x.allocator_company_id, counterpartyId: x.counterparty_company_id, connection: x.connection_type, validFrom: x.valid_from }))
   };
 }
 async function getHistory(c, id) {
@@ -133,7 +143,14 @@ const routes = [
   ['POST', /^\/api\/companies$/, async (c, m, b) => ({ id: await insert(c, 'company', companyFields(b)) }), true],
   ['PUT', /^\/api\/companies\/(\d+)$/, async (c, m, b) => { await updateRow(c, 'company', 'company_id', +m[1], companyFields(b), b.expectedValidFrom); return { id: +m[1] }; }, true],
   ['POST', /^\/api\/people$/, async (c, m, b) => ({ id: await insert(c, 'person', personFields(b)) }), true],
-  ['PUT', /^\/api\/people\/(\d+)$/, async (c, m, b) => { await updateRow(c, 'person', 'person_id', +m[1], personFields(b), b.expectedValidFrom); return { id: +m[1] }; }, true]
+  ['PUT', /^\/api\/people\/(\d+)$/, async (c, m, b) => { await updateRow(c, 'person', 'person_id', +m[1], personFields(b), b.expectedValidFrom); return { id: +m[1] }; }, true],
+  ['POST', /^\/api\/pairings$/, (c, m, b) => pairingWrite(async () => ({ id: await insert(c, 'counterparty_pairing', pairingFields(b)) })), true],
+  ['PUT', /^\/api\/pairings\/(\d+)$/, (c, m, b) => pairingWrite(async () => { await updateRow(c, 'counterparty_pairing', 'pairing_id', +m[1], pairingFields(b), b.expectedValidFrom); return { id: +m[1] }; }), true],
+  ['DELETE', /^\/api\/pairings\/(\d+)$/, async (c, m) => {
+    const [r] = await c.query('DELETE FROM counterparty_pairing WHERE pairing_id = ?', [+m[1]]);
+    if (!r.affectedRows) throw new HttpError(404, 'That record no longer exists. Reload to see the latest data.');
+    return { id: +m[1] };
+  }, true]
 ];
 
 const reply = (statusCode, body) => ({ statusCode, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }, body: JSON.stringify(body) });
@@ -169,8 +186,8 @@ async function handleApi(event) {
 }
 
 /* ---------- Nightly backup: every table as CSV, a workbook that can seed an empty database, and a manifest with counts ---------- */
-export const BACKUP_TABLES = ['company', 'person', 'interaction', 'interaction_person', 'action',
-  'company_history', 'person_history', 'interaction_history', 'interaction_person_history', 'action_history'];
+export const BACKUP_TABLES = ['company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing',
+  'company_history', 'person_history', 'interaction_history', 'interaction_person_history', 'action_history', 'counterparty_pairing_history'];
 
 async function runBackup() {
   const stamp = new Date().toISOString();

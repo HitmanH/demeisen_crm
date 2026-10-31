@@ -13,11 +13,13 @@ export const WORKBOOK_COLUMNS = {
   Person: ['Person ID', 'Person Name', 'Person Email', 'Company Name', 'Title', 'Phone', 'Notes'],
   Interaction: ['Interaction ID', 'Entry Type', 'Interaction Date', 'Company Name', 'Format', 'Via (Prime CI)', 'People Involved', 'Interaction Desc',
     'Interaction Next Steps', 'Recorded By', 'Review', 'Last Updated', 'People Involved IDs', 'Recorded By ID'],
-  Action: ['Action ID', 'Action Desc', 'Action Due Date', 'Status', 'Owner', 'Interaction ID', 'Company', 'Review', 'Owner ID']
+  Action: ['Action ID', 'Action Desc', 'Action Due Date', 'Status', 'Owner', 'Interaction ID', 'Company', 'Review', 'Owner ID'],
+  'Counterparty Pairing': ['Pairing ID', 'Allocator', 'Prime CI', 'Connection']
 };
 const WIDTHS = {
   Company: [11, 13, 36, 18, 18, 60], Person: [10, 26, 32, 34, 20, 16, 46],
-  Interaction: [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18, 16, 12], Action: [10, 62, 15, 10, 15, 13, 30, 40, 10]
+  Interaction: [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18, 16, 12], Action: [10, 62, 15, 10, 15, 13, 30, 40, 10],
+  'Counterparty Pairing': [10, 36, 36, 30]
 };
 
 function sheet(tab, rows) {
@@ -53,5 +55,7 @@ export function buildWorkbook(data) {
   XLSX.utils.book_append_sheet(wb, sheet('Action', sortId(data.actions).map(a => ({ 'Action ID': a.id, 'Action Desc': a.desc, 'Action Due Date': xd(a.due),
     'Status': a.status, 'Owner': pName(a.ownerId), 'Interaction ID': a.interactionId || '', 'Company': coName(ixCompany.get(a.interactionId)), 'Review': a.review || '',
     'Owner ID': a.ownerId || '' }))), 'Action');
+  XLSX.utils.book_append_sheet(wb, sheet('Counterparty Pairing', sortId(data.pairings).map(p => ({ 'Pairing ID': p.id, 'Allocator': coName(p.allocatorId),
+    'Prime CI': coName(p.counterpartyId), 'Connection': p.connection }))), 'Counterparty Pairing');
   return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
 }
