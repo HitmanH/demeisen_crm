@@ -5,7 +5,7 @@ Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and
 ## Layout
 
 - `web/index.html`: the website, a single page with no build step.
-- `db/migrations/001_schema.sql`: Azure SQL schema, using temporal tables (`valid_from` / `valid_to`). Not yet run or connected to the website.
+- `db/migrations/001_schema.sql`: MySQL 8.4 schema for Amazon RDS, with trigger-based history (`valid_from` / `valid_to`). Not yet run or connected to the website.
 
 ## Running it
 
