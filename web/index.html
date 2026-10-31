@@ -70,7 +70,8 @@ header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; b
 header.top .wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; padding-block: 10px; }
 .brand { font-family: var(--f-display); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
 .brand span { font-family: var(--f-body); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-left: 8px; }
-nav.tabs { display: flex; flex-wrap: wrap; gap: 2px; flex: 1; min-width: 0; }
+nav.tabs { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.tab-row { display: flex; flex-wrap: wrap; gap: 2px; }
 nav.tabs a { padding: 8px 12px; border-radius: var(--r); color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
 nav.tabs a:hover { color: var(--ink); background: var(--hover); }
 nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
@@ -269,16 +270,21 @@ td.num, th.num { text-align: right; }
   <div class="wrap">
     <div class="brand">Demeisen <span>Investor CRM</span></div>
     <nav class="tabs" aria-label="Sections">
-      <a href="#home" data-view="home">Overview</a>
-      <a href="#todo" data-view="todo">To-do</a>
-      <a href="#interactions" data-view="interactions">Interactions</a>
-      <a href="#allocator" data-view="allocator">External Party One Pager</a>
-      <a href="#pairings" data-view="pairings">Counterparty Pairings</a>
-      <a href="#log" data-view="log">Log interaction / intel</a>
-      <a href="#search" data-view="search">Search</a>
-      <a href="#companies" data-view="companies">Companies</a>
-      <a href="#people" data-view="people">People</a>
-      <a href="#settings" data-view="settings">Settings</a>
+      <div class="tab-row">
+        <a href="#home" data-view="home">Overview</a>
+        <a href="#todo" data-view="todo">To-do</a>
+        <a href="#interactions" data-view="interactions">Interactions</a>
+        <a href="#allocator" data-view="allocator">External Party One Pager</a>
+        <a href="#cilead" data-view="cilead">CI Lead</a>
+        <a href="#log" data-view="log">Log interaction / intel</a>
+        <a href="#search" data-view="search">Search</a>
+      </div>
+      <div class="tab-row">
+        <a href="#pairings" data-view="pairings">Counterparty Pairings</a>
+        <a href="#companies" data-view="companies">Companies</a>
+        <a href="#people" data-view="people">People</a>
+        <a href="#settings" data-view="settings">Settings</a>
+      </div>
     </nav>
   </div>
 </header>
@@ -445,7 +451,7 @@ function toast(msg) {
 }
 
 /* ---------- Routing ---------- */
-const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
 const view = document.getElementById('view');
 function route() {
   let v = location.hash.slice(1);
@@ -1152,11 +1158,61 @@ function renderPeople() {
   }
 }
 
+/* ---------- CI Lead ---------- */
+// Who leads an allocator: its Relationship Lead; if none, its Initial Connection; if neither, whoever is on its earliest entry with a Prime CI.
+function ciLeads(allocatorId) {
+  const mine = db.pairings.filter(p => p.allocatorId === allocatorId);
+  for (const connection of ['Relationship Lead', 'Initial Connection']) {
+    const hits = mine.filter(p => p.connection === connection);
+    if (hits.length) return hits.map(p => ({ ciId: p.counterpartyId, basis: connection, pairing: p }));
+  }
+  const via = db.interactions.filter(i => i.companyId === allocatorId && i.viaId && i.date);
+  const first = via.reduce((m, i) => (!m || i.date < m ? i.date : m), '');
+  return [...new Set(via.filter(i => i.date === first).map(i => i.viaId))].map(ciId => ({ ciId, basis: 'Earliest entry', entryDate: first }));
+}
+let ciId = null;
+function renderCiLead() {
+  const cis = db.companies.filter(c => c.type === 'Prime CI').sort((a, b) => a.name.localeCompare(b.name));
+  if (!cis.some(c => c.id === ciId)) ciId = cis[0]?.id || null;
+  const allocators = db.companies.filter(c => c.type === 'Investor' || c.type === 'Other');
+  const rows = allocators.flatMap(c => ciLeads(c.id).filter(l => l.ciId === ciId).map(l => {
+    return { c, ...l, last: db.interactions.filter(i => i.companyId === c.id).sort(byRecent)[0] };
+  })).sort((a, b) => (b.last?.date || '').localeCompare(a.last?.date || '') || a.c.name.localeCompare(b.c.name));
+  const count = basis => rows.filter(r => r.basis === basis).length;
+  const unassigned = allocators.filter(c => !ciLeads(c.id).length).length;
+  const how = r => {
+    if (r.basis === 'Earliest entry') return `<span class="muted">First entry ${fmt(r.entryDate)}</span>`;
+    return [esc(r.pairing.detail), fmtMonth(r.pairing.date)].filter(Boolean).join(' · ');
+  };
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>CI Lead</h1><p class="sub">Allocators a cap intro counterparty leads, with the latest interaction on each. Where no lead is set, this uses the initial connection, then the earliest entry with a Prime CI.</p></div>
+      <div class="toolbar"><label class="lbl" for="ci-co">Prime CI</label>
+        <select id="ci-co">${cis.map(c => `<option value="${c.id}" ${c.id === ciId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div></div>
+    <div class="stack">
+      <div class="tiles">
+        <div class="panel tile"><span class="n">${rows.length}</span><span class="lbl">Allocators</span><span class="small">${unassigned} with no Prime CI at all</span></div>
+        <div class="panel tile"><span class="n">${count('Relationship Lead')}</span><span class="lbl">Relationship Lead</span><span class="small">Set on Counterparty Pairings</span></div>
+        <div class="panel tile"><span class="n">${count('Initial Connection')}</span><span class="lbl">Initial Connection</span><span class="small">No lead set</span></div>
+        <div class="panel tile"><span class="n">${count('Earliest entry')}</span><span class="lbl">Earliest entry</span><span class="small">No lead or initial connection set</span></div>
+      </div>
+      <div class="panel tbl-wrap"><table class="ix-table">
+        <thead><tr><th>Allocator</th><th>Why listed</th><th>Connection</th><th>Latest</th><th>Format</th><th>Latest interaction</th></tr></thead>
+        <tbody>${rows.length ? rows.map(r => `<tr>
+          <td>${coPill(r.c)}</td><td class="nowrap">${esc(r.basis)}</td><td>${how(r)}</td>
+          <td class="mono nowrap">${r.last ? fmt(r.last.date) : '<span class="muted">None</span>'}</td><td>${esc(r.last?.format)}</td>
+          <td>${r.last ? `<a href="#" class="clamp" data-open-int="${r.last.id}">${esc(r.last.desc)}</a>` : ''}</td></tr>`).join('')
+          : '<tr><td colspan="6" class="muted">No allocators for this Prime CI yet.</td></tr>'}
+        </tbody></table></div>
+    </div>`;
+  view.querySelector('#ci-co').addEventListener('change', e => { ciId = +e.target.value; renderCiLead(); });
+}
+
 /* ---------- Counterparty pairings ---------- */
 const PAIRING_CONNECTIONS = ['Event Connection', 'Initial Connection', 'Relationship Lead', 'SMA Financing Counterparty'];
+const fmtMonth = s => s ? new Date(s + 'T00:00').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }).replace(' ', '-') : '';
 let paEdit = null, paConn = '', paAllocator = '', paCounterparty = '';
 function renderPairings() {
-  const editing = paEdit === 'new' ? { id: null, allocatorId: +paAllocator || null, counterpartyId: +paCounterparty || null, connection: paConn } : paEdit ? byId(db.pairings, paEdit) : null;
+  const editing = paEdit === 'new' ? { id: null, allocatorId: +paAllocator || null, counterpartyId: +paCounterparty || null, connection: paConn, detail: '', date: '' } : paEdit ? byId(db.pairings, paEdit) : null;
   const coN = id => company(id)?.name || '';
   const rows = db.pairings.filter(p => (!paConn || p.connection === paConn) && (!paAllocator || p.allocatorId === +paAllocator) && (!paCounterparty || p.counterpartyId === +paCounterparty))
     .sort((a, b) => coN(a.allocatorId).localeCompare(coN(b.allocatorId)) || coN(a.counterpartyId).localeCompare(coN(b.counterpartyId)) || a.connection.localeCompare(b.connection));
@@ -1185,16 +1241,18 @@ function renderPairings() {
           <div class="field"><label class="lbl" for="pa-cp">Prime CI</label><select id="pa-cp"><option value="">Choose a Prime CI</option>${typedOpts(['Prime CI', 'Other'], editing.counterpartyId)}</select></div>
           <div class="field"><label class="lbl" for="pa-conn">Connection</label><input type="text" id="pa-conn" list="pa-conn-list" maxlength="50" value="${esc(editing.connection)}" placeholder="Choose or type a connection">
             <datalist id="pa-conn-list">${connections.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+          <div class="field"><label class="lbl" for="pa-detail">Detail <em>(optional)</em></label><input type="text" id="pa-detail" maxlength="200" value="${esc(editing.detail)}"></div>
+          <div class="field"><label class="lbl" for="pa-date">Month <em>(optional)</em></label><input type="month" id="pa-date" value="${esc((editing.date || '').slice(0, 7))}"></div>
         </div>
         <div class="form-actions"><button class="btn" type="submit">Save pairing</button><button type="button" class="btn ghost" id="pa-cancel">Cancel</button>
           ${editing.id ? '<button type="button" class="btn ghost" id="pa-delete">Delete pairing</button>' : ''}<span class="form-error" id="pa-err" role="alert"></span></div>
       </form>` : ''}
       <div class="panel tbl-wrap"><table>
-        <thead><tr><th>Allocator</th><th>Prime CI</th><th>Connection</th><th></th></tr></thead>
+        <thead><tr><th>Allocator</th><th>Prime CI</th><th>Connection</th><th>Detail</th><th>Date</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(p => `<tr>
-          <td>${coPill(company(p.allocatorId))}</td><td>${coPill(company(p.counterpartyId))}</td><td>${esc(p.connection)}</td>
+          <td>${coPill(company(p.allocatorId))}</td><td>${coPill(company(p.counterpartyId))}</td><td>${esc(p.connection)}</td><td>${esc(p.detail)}</td><td class="mono">${fmtMonth(p.date)}</td>
           <td style="text-align:right"><button type="button" class="btn ghost sm" data-pa-edit="${p.id}">Edit</button></td></tr>`).join('')
-          : `<tr><td colspan="4" class="muted">${db.pairings.length ? 'No pairings match these filters.' : 'No pairings yet. Use Add pairing to record the first one.'}</td></tr>`}
+          : `<tr><td colspan="6" class="muted">${db.pairings.length ? 'No pairings match these filters.' : 'No pairings yet. Use Add pairing to record the first one.'}</td></tr>`}
         </tbody></table></div>
     </div>`;
   view.querySelector('#pa-f-conn').addEventListener('change', e => { paConn = e.target.value; renderPairings(); });
@@ -1213,7 +1271,8 @@ function renderPairings() {
   });
   view.querySelector('#pa-form').addEventListener('submit', e => {
     e.preventDefault();
-    const rec = { allocatorId: +view.querySelector('#pa-al').value, counterpartyId: +view.querySelector('#pa-cp').value, connection: view.querySelector('#pa-conn').value.trim() };
+    const rec = { allocatorId: +view.querySelector('#pa-al').value, counterpartyId: +view.querySelector('#pa-cp').value, connection: view.querySelector('#pa-conn').value.trim(),
+      detail: view.querySelector('#pa-detail').value.trim(), date: view.querySelector('#pa-date').value ? view.querySelector('#pa-date').value + '-01' : '' };
     if (!rec.allocatorId) { err.textContent = 'Choose the allocator.'; return; }
     if (!rec.counterpartyId) { err.textContent = 'Choose the Prime CI.'; return; }
     if (rec.allocatorId === rec.counterpartyId) { err.textContent = 'Choose two different companies.'; return; }
@@ -1376,7 +1435,7 @@ function importWorkbook(buf, filename) {
   if (wb.SheetNames.some(n => lc(n) === 'counterparty pairing')) readSheet(wb, 'Counterparty Pairing').forEach((r, i) => {
     const al = coByName.get(lc(col(r, 'Allocator'))), cp = coByName.get(lc(col(r, 'Prime CI'))), connection = str(col(r, 'Connection'));
     if (!al || !cp || !connection) { warn.push(`Pairing on row ${i + 2} skipped: it needs a known allocator, a known Prime CI and a connection.`); return; }
-    pairings.push({ id: +col(r, 'Pairing ID') || 100000 + i, allocatorId: al.id, counterpartyId: cp.id, connection });
+    pairings.push({ id: +col(r, 'Pairing ID') || 100000 + i, allocatorId: al.id, counterpartyId: cp.id, connection, detail: str(col(r, 'Detail')), date: xlDate(col(r, 'Date')) });
   });
 
   return { companies, people, interactions, actions, pairings,
@@ -1418,7 +1477,7 @@ const xdt = s => { if (!s) return ''; const d = new Date(s); return Date.UTC(d.g
 function buildWorkbook() {
   const coName = id => company(id)?.name || '';
   const pName = id => person(id)?.name || '';
-  const DATE_FMT = { 'Interaction Date': 'dd-mmm-yyyy', 'Action Due Date': 'dd-mmm-yyyy', 'Last Updated': 'dd-mmm-yyyy hh:mm' };
+  const DATE_FMT = { 'Interaction Date': 'dd-mmm-yyyy', 'Action Due Date': 'dd-mmm-yyyy', 'Last Updated': 'dd-mmm-yyyy hh:mm', 'Date': 'mmm-yy' };
   const sheet = (rows, widths, header) => {
     const ws = XLSX.utils.json_to_sheet(rows, { header });
     const range = XLSX.utils.decode_range(ws['!ref']);
@@ -1444,7 +1503,7 @@ function buildWorkbook() {
     'Status': a.status, 'Owner': pName(a.ownerId), 'Interaction ID': a.interactionId || '',
     'Company': coName(byId(db.interactions, a.interactionId)?.companyId), 'Review': a.review || '', 'Owner ID': a.ownerId || '' })), [10, 62, 15, 10, 15, 13, 30, 40, 10]), 'Action');
   XLSX.utils.book_append_sheet(wb, sheet(sortId(db.pairings).map(p => ({ 'Pairing ID': p.id, 'Allocator': coName(p.allocatorId), 'Prime CI': coName(p.counterpartyId),
-    'Connection': p.connection })), [10, 36, 36, 30], ['Pairing ID', 'Allocator', 'Prime CI', 'Connection']), 'Counterparty Pairing');
+    'Connection': p.connection, 'Detail': p.detail || '', 'Date': xd(p.date) })), [10, 36, 36, 30, 36, 10], ['Pairing ID', 'Allocator', 'Prime CI', 'Connection', 'Detail', 'Date']), 'Counterparty Pairing');
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
 document.getElementById('export').addEventListener('click', async () => {

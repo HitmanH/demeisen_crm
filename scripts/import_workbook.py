@@ -100,7 +100,7 @@ for r in (rows('Counterparty Pairing') if 'Counterparty Pairing' in wb.sheetname
     if not conn: warn.append(f'Pairing {i}: no connection')
     if (al, cp, key(conn)) in seen: warn.append(f'Pairing {i}: duplicate')
     seen.add((al, cp, key(conn)))
-    pairings.append((i, al, cp, conn))
+    pairings.append((i, al, cp, conn, text(r.get('detail')), date(r.get('date'), f'Pairing {i}', warn)))
 
 want = dict(company=len(companies), person=len(people), interaction=len(interactions), interaction_person=len(links), action=len(actions), counterparty_pairing=len(pairings))
 print('workbook', want, 'problems', len(warn))
@@ -124,7 +124,7 @@ try:
     k.executemany('INSERT INTO interaction (interaction_id,entry_type,interaction_date,company_id,via_company_id,format,description,next_steps,recorded_by_person_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', interactions)
     k.executemany('INSERT INTO interaction_person (interaction_id,person_id) VALUES (%s,%s)', links)
     k.executemany('INSERT INTO action (action_id,description,due_date,status,owner_person_id,interaction_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s)', actions)
-    k.executemany('INSERT INTO counterparty_pairing (pairing_id,allocator_company_id,counterparty_company_id,connection_type) VALUES (%s,%s,%s,%s)', pairings)
+    k.executemany('INSERT INTO counterparty_pairing (pairing_id,allocator_company_id,counterparty_company_id,connection_type,connection_detail,connection_date) VALUES (%s,%s,%s,%s,%s,%s)', pairings)
     got = {}
     for t in tables:
         k.execute(f'SELECT COUNT(*) FROM {t}'); got[t] = k.fetchone()[0]

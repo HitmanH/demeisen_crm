@@ -13,6 +13,7 @@ Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and
 - `.github/workflows/deploy.yml`: on merge to `main`, tests and deploys the API code and page.
 - `db/migrations/002_app_user.sql`: database account for the API.
 - `db/migrations/003_counterparty_pairing.sql`: counterparty pairings table. Run it before deploying code that reads the table.
+- `db/migrations/004_pairing_detail.sql`: adds detail and date to pairings. Run it before deploying code that uses them.
 - `db/seed/fictional.sql`: fictional test data.
 
 ## Backups
