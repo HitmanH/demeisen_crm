@@ -35,7 +35,7 @@ def date(v, where, warn):
 key = lambda s: (s or '').strip().lower()
 
 warn = []
-companies, people, interactions, links, actions = [], [], [], [], []
+companies, people, interactions, links, actions, pairings = [], [], [], [], [], []
 co_ids = {}
 for r in rows('Company'):
     if not text(r.get('company name')): continue
@@ -91,7 +91,18 @@ for r in rows('Action'):
     if st not in ('Open', 'Done', 'Cancelled'): warn.append(f'Action {i}: status not recognised')
     actions.append((i, text(r['action desc']), date(r.get('action due date'), f'Action {i}', warn), st, own, ix, text(r.get('review'))))
 
-want = dict(company=len(companies), person=len(people), interaction=len(interactions), interaction_person=len(links), action=len(actions))
+# Older workbooks have no pairing tab.
+seen = set()
+for r in (rows('Counterparty Pairing') if 'Counterparty Pairing' in wb.sheetnames else ()):
+    i = int(r['pairing id']); al = co_ids.get(key(r.get('allocator'))); cp = co_ids.get(key(r.get('prime ci'))); conn = text(r.get('connection'))
+    if not al: warn.append(f'Pairing {i}: allocator not found')
+    if not cp: warn.append(f'Pairing {i}: Prime CI not found')
+    if not conn: warn.append(f'Pairing {i}: no connection')
+    if (al, cp, key(conn)) in seen: warn.append(f'Pairing {i}: duplicate')
+    seen.add((al, cp, key(conn)))
+    pairings.append((i, al, cp, conn))
+
+want = dict(company=len(companies), person=len(people), interaction=len(interactions), interaction_person=len(links), action=len(actions), counterparty_pairing=len(pairings))
 print('workbook', want, 'problems', len(warn))
 for w in warn[:40]: print('  ', w)
 if warn: sys.exit('Stopped: nothing was loaded. Fix the workbook and run again.')
@@ -102,7 +113,7 @@ A = json.loads(os.environ.pop('CRM_SECRET'))
 c = pymysql.connect(host=HOST, user=A['username'], password=A['password'], database=DATABASE, charset='utf8mb4', autocommit=False,
                     connect_timeout=20, ssl_ca=ca, ssl_verify_cert=True, ssl_verify_identity=True)
 k = c.cursor()
-tables = ['company', 'person', 'interaction', 'interaction_person', 'action']
+tables = ['company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing']
 for t in tables + [t + '_history' for t in tables]:
     k.execute(f'SELECT COUNT(*) FROM {t}')
     if k.fetchone()[0]: sys.exit(f'Stopped: {t} is not empty. Nothing was loaded.')
@@ -113,6 +124,7 @@ try:
     k.executemany('INSERT INTO interaction (interaction_id,entry_type,interaction_date,company_id,via_company_id,format,description,next_steps,recorded_by_person_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', interactions)
     k.executemany('INSERT INTO interaction_person (interaction_id,person_id) VALUES (%s,%s)', links)
     k.executemany('INSERT INTO action (action_id,description,due_date,status,owner_person_id,interaction_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s)', actions)
+    k.executemany('INSERT INTO counterparty_pairing (pairing_id,allocator_company_id,counterparty_company_id,connection_type) VALUES (%s,%s,%s,%s)', pairings)
     got = {}
     for t in tables:
         k.execute(f'SELECT COUNT(*) FROM {t}'); got[t] = k.fetchone()[0]

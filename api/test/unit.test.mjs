@@ -14,11 +14,12 @@ const SAMPLE = {
   companies: [{ id: 2, type: 'Investor', name: 'Northgate Capital', investorType: 'Hedge Fund' }, { id: 1, type: 'Demeisen', name: 'Example Fund' }],
   people: [{ id: 1, name: 'Sam Rivers', companyId: 2 }, { id: 2, name: 'Sam Rivers', companyId: 1 }],
   interactions: [{ id: 5, type: 'Interaction', date: '2026-03-01', companyId: 2, viaId: null, people: [2, 1], recordedBy: 2, desc: 'Intro' }],
-  actions: [{ id: 3, desc: 'Follow up', due: '2026-03-08', status: 'Open', ownerId: 2, interactionId: 5 }]
+  actions: [{ id: 3, desc: 'Follow up', due: '2026-03-08', status: 'Open', ownerId: 2, interactionId: 5 }],
+  pairings: [{ id: 4, allocatorId: 2, counterpartyId: 1, connection: 'Relationship Lead' }]
 };
 const readBack = data => XLSX.read(buildWorkbook(data), { type: 'buffer' });
 test('workbook has the export tabs and columns, including when a tab is empty', () => {
-  for (const data of [SAMPLE, { companies: [], people: [], interactions: [], actions: [] }]) {
+  for (const data of [SAMPLE, { companies: [], people: [], interactions: [], actions: [], pairings: [] }]) {
     const wb = readBack(data);
     assert.deepEqual(wb.SheetNames, Object.keys(WORKBOOK_COLUMNS));
     for (const tab of wb.SheetNames) assert.deepEqual(XLSX.utils.sheet_to_json(wb.Sheets[tab], { header: 1 })[0], WORKBOOK_COLUMNS[tab]);
@@ -32,6 +33,10 @@ test('workbook keeps person IDs, so people with the same name stay distinct', ()
   assert.equal(ix['Interaction Date'], 46082); // 1 March 2026 as an Excel date
   assert.equal(ac['Owner ID'], 2);
   assert.equal(ac['Company'], 'Northgate Capital');
+});
+test('workbook names both companies in a pairing', () => {
+  const [p] = XLSX.utils.sheet_to_json(readBack(SAMPLE).Sheets['Counterparty Pairing']);
+  assert.deepEqual(p, { 'Pairing ID': 4, 'Allocator': 'Northgate Capital', 'Prime CI': 'Example Fund', 'Connection': 'Relationship Lead' });
 });
 test('workbook refuses text too long for an Excel cell', () => {
   const companies = [{ ...SAMPLE.companies[0], notes: 'x'.repeat(32768) }];

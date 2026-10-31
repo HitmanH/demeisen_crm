@@ -273,6 +273,7 @@ td.num, th.num { text-align: right; }
       <a href="#todo" data-view="todo">To-do</a>
       <a href="#interactions" data-view="interactions">Interactions</a>
       <a href="#allocator" data-view="allocator">External Party One Pager</a>
+      <a href="#pairings" data-view="pairings">Counterparty Pairings</a>
       <a href="#log" data-view="log">Log interaction / intel</a>
       <a href="#search" data-view="search">Search</a>
       <a href="#companies" data-view="companies">Companies</a>
@@ -350,7 +351,8 @@ function seed() {
       { id: 5, desc: 'Send fee proposal to Harbour Endowment', due: rel(5), ownerId: 4, interactionId: 4, status: 'Open' },
       { id: 6, desc: 'Update investor letter distribution list', due: rel(18), ownerId: 3, interactionId: null, status: 'Open' },
       { id: 7, desc: 'Book follow-up call with Pat Lane', due: '', ownerId: 4, interactionId: 2, status: 'Open' }
-    ]
+    ],
+    pairings: []
   };
 }
 function load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
@@ -362,7 +364,8 @@ function save(changed = true) {
   if (typeof renderStatus === 'function') renderStatus();
   return true;
 }
-let db = LIVE ? { companies: [], people: [], interactions: [], actions: [] } : (load() || seed());
+let db = LIVE ? { companies: [], people: [], interactions: [], actions: [], pairings: [] } : (load() || seed());
+db.pairings = db.pairings || []; // browser data saved before pairings existed
 
 /* ---------- Hosted site: sign-in (authorization code with PKCE) and API calls ---------- */
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -442,7 +445,7 @@ function toast(msg) {
 }
 
 /* ---------- Routing ---------- */
-const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
 const view = document.getElementById('view');
 function route() {
   let v = location.hash.slice(1);
@@ -1149,6 +1152,87 @@ function renderPeople() {
   }
 }
 
+/* ---------- Counterparty pairings ---------- */
+const PAIRING_CONNECTIONS = ['Event Connection', 'Initial Connection', 'Relationship Lead', 'SMA Financing Counterparty'];
+let paEdit = null, paConn = '', paAllocator = '', paCounterparty = '';
+function renderPairings() {
+  const editing = paEdit === 'new' ? { id: null, allocatorId: +paAllocator || null, counterpartyId: +paCounterparty || null, connection: paConn } : paEdit ? byId(db.pairings, paEdit) : null;
+  const coN = id => company(id)?.name || '';
+  const rows = db.pairings.filter(p => (!paConn || p.connection === paConn) && (!paAllocator || p.allocatorId === +paAllocator) && (!paCounterparty || p.counterpartyId === +paCounterparty))
+    .sort((a, b) => coN(a.allocatorId).localeCompare(coN(b.allocatorId)) || coN(a.counterpartyId).localeCompare(coN(b.counterpartyId)) || a.connection.localeCompare(b.connection));
+  const connections = [...new Set([...PAIRING_CONNECTIONS, ...db.pairings.map(p => p.connection)])].sort((a, b) => a.localeCompare(b));
+  const filterOpts = (key, sel) => [...new Set(db.pairings.map(p => p[key]))].sort((a, b) => coN(a).localeCompare(coN(b)))
+    .map(id => `<option value="${id}" ${id === +sel ? 'selected' : ''}>${esc(coN(id))}</option>`).join('');
+  const typedOpts = (types, sel) => types.map(t => {
+    const cs = db.companies.filter(c => c.type === t).sort((a, b) => a.name.localeCompare(b.name));
+    return cs.length ? `<optgroup label="${t}">${cs.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : '';
+  }).join('');
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Counterparty Pairings</h1><p class="sub">How each Prime CI is involved with each allocator. ${rows.length} of ${db.pairings.length} shown.</p></div>
+      <div class="toolbar">
+        <label class="lbl" for="pa-f-conn">Connection</label>
+        <select id="pa-f-conn"><option value="">All connections</option>${connections.map(c => `<option value="${esc(c)}" ${c === paConn ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <label class="lbl" for="pa-f-al">Allocator</label>
+        <select id="pa-f-al"><option value="">All</option>${filterOpts('allocatorId', paAllocator)}</select>
+        <label class="lbl" for="pa-f-cp">Prime CI</label>
+        <select id="pa-f-cp"><option value="">All</option>${filterOpts('counterpartyId', paCounterparty)}</select>
+        <button type="button" class="btn" id="pa-new">Add pairing</button></div></div>
+    <div class="stack">
+      ${editing ? `<form class="panel edit-panel" id="pa-form">
+        <h2>${editing.id ? 'Edit pairing' : 'New pairing'}</h2>
+        <div class="fgrid">
+          <div class="field"><label class="lbl" for="pa-al">Allocator</label><select id="pa-al"><option value="">Choose an allocator</option>${typedOpts(['Investor', 'Other'], editing.allocatorId)}</select></div>
+          <div class="field"><label class="lbl" for="pa-cp">Prime CI</label><select id="pa-cp"><option value="">Choose a Prime CI</option>${typedOpts(['Prime CI', 'Other'], editing.counterpartyId)}</select></div>
+          <div class="field"><label class="lbl" for="pa-conn">Connection</label><input type="text" id="pa-conn" list="pa-conn-list" maxlength="50" value="${esc(editing.connection)}" placeholder="Choose or type a connection">
+            <datalist id="pa-conn-list">${connections.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+        </div>
+        <div class="form-actions"><button class="btn" type="submit">Save pairing</button><button type="button" class="btn ghost" id="pa-cancel">Cancel</button>
+          ${editing.id ? '<button type="button" class="btn ghost" id="pa-delete">Delete pairing</button>' : ''}<span class="form-error" id="pa-err" role="alert"></span></div>
+      </form>` : ''}
+      <div class="panel tbl-wrap"><table>
+        <thead><tr><th>Allocator</th><th>Prime CI</th><th>Connection</th><th></th></tr></thead>
+        <tbody>${rows.length ? rows.map(p => `<tr>
+          <td>${coPill(company(p.allocatorId))}</td><td>${coPill(company(p.counterpartyId))}</td><td>${esc(p.connection)}</td>
+          <td style="text-align:right"><button type="button" class="btn ghost sm" data-pa-edit="${p.id}">Edit</button></td></tr>`).join('')
+          : `<tr><td colspan="4" class="muted">${db.pairings.length ? 'No pairings match these filters.' : 'No pairings yet. Use Add pairing to record the first one.'}</td></tr>`}
+        </tbody></table></div>
+    </div>`;
+  view.querySelector('#pa-f-conn').addEventListener('change', e => { paConn = e.target.value; renderPairings(); });
+  view.querySelector('#pa-f-al').addEventListener('change', e => { paAllocator = e.target.value; renderPairings(); });
+  view.querySelector('#pa-f-cp').addEventListener('change', e => { paCounterparty = e.target.value; renderPairings(); });
+  view.querySelector('#pa-new').addEventListener('click', () => { paEdit = 'new'; renderPairings(); view.querySelector('#pa-al').focus(); });
+  view.querySelectorAll('[data-pa-edit]').forEach(b => b.addEventListener('click', () => { paEdit = +b.dataset.paEdit; renderPairings(); window.scrollTo(0, 0); }));
+  if (!editing) return;
+  const err = view.querySelector('#pa-err');
+  const done = msg => { paEdit = null; renderPairings(); toast(msg); };
+  view.querySelector('#pa-cancel').addEventListener('click', () => { paEdit = null; renderPairings(); });
+  view.querySelector('#pa-delete')?.addEventListener('click', () => {
+    if (!confirm('Delete this pairing?')) return;
+    if (LIVE) { liveWrite(async () => { await api('DELETE', `/api/pairings/${editing.id}`); await reloadData(); done('Pairing deleted'); }, err); return; }
+    db.pairings = db.pairings.filter(p => p.id !== editing.id); save(); done('Pairing deleted');
+  });
+  view.querySelector('#pa-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const rec = { allocatorId: +view.querySelector('#pa-al').value, counterpartyId: +view.querySelector('#pa-cp').value, connection: view.querySelector('#pa-conn').value.trim() };
+    if (!rec.allocatorId) { err.textContent = 'Choose the allocator.'; return; }
+    if (!rec.counterpartyId) { err.textContent = 'Choose the Prime CI.'; return; }
+    if (rec.allocatorId === rec.counterpartyId) { err.textContent = 'Choose two different companies.'; return; }
+    if (!rec.connection) { err.textContent = 'Add the connection.'; return; }
+    // Reuse the existing spelling, so a filter on the connection finds every row.
+    rec.connection = connections.find(c => c.toLowerCase() === rec.connection.toLowerCase()) || rec.connection;
+    if (db.pairings.some(p => p.id !== editing.id && p.allocatorId === rec.allocatorId && p.counterpartyId === rec.counterpartyId && p.connection === rec.connection)) { err.textContent = 'That pairing already exists.'; return; }
+    if (LIVE) {
+      liveWrite(async () => {
+        await api(editing.id ? 'PUT' : 'POST', editing.id ? `/api/pairings/${editing.id}` : '/api/pairings', { ...rec, expectedValidFrom: editing.validFrom });
+        await reloadData(); done('Pairing saved');
+      }, err);
+      return;
+    }
+    if (editing.id) Object.assign(byId(db.pairings, editing.id), rec); else db.pairings.push({ id: nextId(db.pairings), ...rec });
+    save(); done('Pairing saved');
+  });
+}
+
 /* ---------- Shared clicks ---------- */
 view.addEventListener('click', e => {
   const open = e.target.closest('[data-open-int]');
@@ -1287,7 +1371,15 @@ function importWorkbook(buf, filename) {
       status: st === 'done' ? 'Done' : st === 'cancelled' || st === 'canceled' ? 'Cancelled' : 'Open', review: str(col(r, 'Review')) });
   });
 
-  return { companies, people, interactions, actions,
+  // Optional: older workbooks have no pairing tab.
+  const pairings = [];
+  if (wb.SheetNames.some(n => lc(n) === 'counterparty pairing')) readSheet(wb, 'Counterparty Pairing').forEach((r, i) => {
+    const al = coByName.get(lc(col(r, 'Allocator'))), cp = coByName.get(lc(col(r, 'Prime CI'))), connection = str(col(r, 'Connection'));
+    if (!al || !cp || !connection) { warn.push(`Pairing on row ${i + 2} skipped: it needs a known allocator, a known Prime CI and a connection.`); return; }
+    pairings.push({ id: +col(r, 'Pairing ID') || 100000 + i, allocatorId: al.id, counterpartyId: cp.id, connection });
+  });
+
+  return { companies, people, interactions, actions, pairings,
     meta: { source: filename, loadedAt: new Date().toISOString(), warnings: warn } };
 }
 
@@ -1327,8 +1419,8 @@ function buildWorkbook() {
   const coName = id => company(id)?.name || '';
   const pName = id => person(id)?.name || '';
   const DATE_FMT = { 'Interaction Date': 'dd-mmm-yyyy', 'Action Due Date': 'dd-mmm-yyyy', 'Last Updated': 'dd-mmm-yyyy hh:mm' };
-  const sheet = (rows, widths) => {
-    const ws = XLSX.utils.json_to_sheet(rows);
+  const sheet = (rows, widths, header) => {
+    const ws = XLSX.utils.json_to_sheet(rows, { header });
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let c = range.s.c; c <= range.e.c; c++) {
       const z = DATE_FMT[ws[XLSX.utils.encode_cell({ r: 0, c })]?.v];
@@ -1351,6 +1443,8 @@ function buildWorkbook() {
   XLSX.utils.book_append_sheet(wb, sheet(sortId(db.actions).map(a => ({ 'Action ID': a.id, 'Action Desc': a.desc, 'Action Due Date': xd(a.due),
     'Status': a.status, 'Owner': pName(a.ownerId), 'Interaction ID': a.interactionId || '',
     'Company': coName(byId(db.interactions, a.interactionId)?.companyId), 'Review': a.review || '', 'Owner ID': a.ownerId || '' })), [10, 62, 15, 10, 15, 13, 30, 40, 10]), 'Action');
+  XLSX.utils.book_append_sheet(wb, sheet(sortId(db.pairings).map(p => ({ 'Pairing ID': p.id, 'Allocator': coName(p.allocatorId), 'Prime CI': coName(p.counterpartyId),
+    'Connection': p.connection })), [10, 36, 36, 30], ['Pairing ID', 'Allocator', 'Prime CI', 'Connection']), 'Counterparty Pairing');
   return XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 }
 document.getElementById('export').addEventListener('click', async () => {
