@@ -15,7 +15,7 @@ async function connect() {
   const token = await new Signer({ hostname: DB_HOST, port: 3306, username: DB_USER, region: AWS_REGION }).getAuthToken();
   return mysql.createConnection({
     host: DB_HOST, port: 3306, user: DB_USER, password: token, database: 'crm', charset: 'utf8mb4',
-    ssl: { ca: ca(), rejectUnauthorized: true }, dateStrings: true, timezone: 'Z', connectTimeout: 8000,
+    ssl: { ca: ca(), rejectUnauthorized: true }, dateStrings: true, timezone: 'Z', connectTimeout: 20000, // the first request after idle can be slow
     authPlugins: { mysql_clear_password: () => () => Buffer.from(token + '\0') }
   });
 }

@@ -45,7 +45,7 @@ Resources:
       AllowedOAuthScopes: [openid, email]
       CallbackURLs: [!Sub 'https://${Distribution.DomainName}/']
       LogoutURLs: [!Sub 'https://${Distribution.DomainName}/']
-      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
       PreventUserExistenceErrors: ENABLED
       EnableTokenRevocation: true
       IdTokenValidity: 8
