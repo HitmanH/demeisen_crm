@@ -15,7 +15,8 @@ Parameters:
   AuthDomainPrefix: { Type: String, Default: demeisen-crm-poc }
   BackupRetentionDays: { Type: Number, Default: 90 }
   AlertEmail: { Type: String, Description: Address for budget and backup alerts }
-  GitHubRepo: { Type: String, Default: HitmanH/demeisen_crm }
+  # GitHub's subject prefix for this repo, from: gh api repos/<repo>/actions/oidc/customization/sub
+  GitHubSubjectPrefix: { Type: String, Default: 'repo:HitmanH@5677860/demeisen_crm@1440296804' }
 
 Resources:
   # ---------- Sign-in: invited users only, MFA required ----------
@@ -356,14 +357,14 @@ Resources:
             Condition:
               StringEquals:
                 'token.actions.githubusercontent.com:aud': sts.amazonaws.com
-                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubRepo}:ref:refs/heads/main'
+                'token.actions.githubusercontent.com:sub': !Sub '${GitHubSubjectPrefix}:ref:refs/heads/main'
       Policies:
         - PolicyName: deploy-code-and-page
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: [lambda:UpdateFunctionCode, lambda:GetFunctionConfiguration]
+                Action: [lambda:UpdateFunctionCode, lambda:GetFunction, lambda:GetFunctionConfiguration]
                 Resource: !GetAtt Function.Arn
               - Effect: Allow
                 Action: s3:PutObject
