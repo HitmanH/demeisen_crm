@@ -15,7 +15,7 @@ const SAMPLE = {
   people: [{ id: 1, name: 'Sam Rivers', companyId: 2 }, { id: 2, name: 'Sam Rivers', companyId: 1 }],
   interactions: [{ id: 5, type: 'Interaction', date: '2026-03-01', companyId: 2, viaId: null, people: [2, 1], recordedBy: 2, desc: 'Intro' }],
   actions: [{ id: 3, desc: 'Follow up', due: '2026-03-08', status: 'Open', ownerId: 2, interactionId: 5 }],
-  pairings: [{ id: 4, allocatorId: 2, counterpartyId: 1, connection: 'Relationship Lead' }]
+  pairings: [{ id: 4, allocatorId: 2, counterpartyId: 1, connection: 'Relationship Lead', detail: 'Email', date: '2026-05-01' }]
 };
 const readBack = data => XLSX.read(buildWorkbook(data), { type: 'buffer' });
 test('workbook has the export tabs and columns, including when a tab is empty', () => {
@@ -36,7 +36,7 @@ test('workbook keeps person IDs, so people with the same name stay distinct', ()
 });
 test('workbook names both companies in a pairing', () => {
   const [p] = XLSX.utils.sheet_to_json(readBack(SAMPLE).Sheets['Counterparty Pairing']);
-  assert.deepEqual(p, { 'Pairing ID': 4, 'Allocator': 'Northgate Capital', 'Prime CI': 'Example Fund', 'Connection': 'Relationship Lead' });
+  assert.deepEqual(p, { 'Pairing ID': 4, 'Allocator': 'Northgate Capital', 'Prime CI': 'Example Fund', 'Connection': 'Relationship Lead', 'Detail': 'Email', 'Date': 46143 });
 });
 test('workbook refuses text too long for an Excel cell', () => {
   const companies = [{ ...SAMPLE.companies[0], notes: 'x'.repeat(32768) }];

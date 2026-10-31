@@ -61,7 +61,7 @@ function actionFields(b) {
 }
 function pairingFields(b) {
   return { allocator_company_id: cleanInt(b.allocatorId, 'allocator', true), counterparty_company_id: cleanInt(b.counterpartyId, 'Prime CI', true),
-    connection_type: cleanText(b.connection, 50, 'connection', true) };
+    connection_type: cleanText(b.connection, 50, 'connection', true), connection_detail: cleanText(b.detail, 200, 'detail'), connection_date: cleanDate(b.date, 'date') };
 }
 const pairingWrite = async fn => {
   try { return await fn(); }
@@ -91,7 +91,7 @@ async function getData(c) {
       people: byIx.get(x.interaction_id) || [], recordedBy: x.recorded_by_person_id, desc: x.description, next: x.next_steps || '', review: x.review || '', validFrom: x.valid_from,
       ...(wasEdited.has(x.interaction_id) ? { updated: x.valid_from.replace(' ', 'T') + 'Z' } : {}) })),
     actions: actions.map(x => ({ id: x.action_id, desc: x.description, due: x.due_date || '', ownerId: x.owner_person_id, interactionId: x.interaction_id, status: x.status, review: x.review || '', validFrom: x.valid_from })),
-    pairings: pairings.map(x => ({ id: x.pairing_id, allocatorId: x.allocator_company_id, counterpartyId: x.counterparty_company_id, connection: x.connection_type, validFrom: x.valid_from }))
+    pairings: pairings.map(x => ({ id: x.pairing_id, allocatorId: x.allocator_company_id, counterpartyId: x.counterparty_company_id, connection: x.connection_type, detail: x.connection_detail || '', date: x.connection_date || '', validFrom: x.valid_from }))
   };
 }
 async function getHistory(c, id) {
