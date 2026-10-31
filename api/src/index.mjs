@@ -1,0 +1,195 @@
+// Demeisen CRM API and nightly backup. One Lambda function handles both:
+// API Gateway requests, and the scheduled event { "backup": true }.
+import { readFileSync } from 'node:fs';
+import mysql from 'mysql2/promise';
+import { Signer } from '@aws-sdk/rds-signer';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { toCsv } from './csv.mjs';
+import { HttpError, cleanInt, cleanText, cleanDate, oneOf, cleanIds } from './validate.mjs';
+
+const { DB_HOST, DB_USER, BACKUP_BUCKET, AWS_REGION } = process.env;
+const ca = () => readFileSync(new URL('../rds-ca.pem', import.meta.url), 'utf8');
+
+// A new connection per request: two users, so no pool to leak @crm_user between people.
+async function connect() {
+  const token = await new Signer({ hostname: DB_HOST, port: 3306, username: DB_USER, region: AWS_REGION }).getAuthToken();
+  return mysql.createConnection({
+    host: DB_HOST, port: 3306, user: DB_USER, password: token, database: 'crm', charset: 'utf8mb4',
+    ssl: { ca: ca(), rejectUnauthorized: true }, dateStrings: true, timezone: 'Z', connectTimeout: 8000,
+    authPlugins: { mysql_clear_password: () => () => Buffer.from(token + '\0') }
+  });
+}
+
+const COMPANY_TYPES = ['Investor', 'Prime CI', 'Other', 'Demeisen'];
+const norm = v => (v === undefined || v === null || v === '' ? null : String(v));
+
+/* Update one row inside a transaction. Rejects if someone else changed it since it was
+   opened, and skips the write when nothing changed, so no empty history row is added. */
+async function updateRow(c, table, idCol, id, fields, expected) {
+  const [rows] = await c.query(`SELECT * FROM ${table} WHERE ${idCol} = ? FOR UPDATE`, [id]);
+  if (!rows.length) throw new HttpError(404, 'That record no longer exists. Reload to see the latest data.');
+  const row = rows[0];
+  if (expected && row.valid_from !== expected) {
+    throw new HttpError(409, `Changed by ${row.changed_by} at ${row.valid_from} UTC. Reload to see the latest version.`);
+  }
+  const cols = Object.keys(fields).filter(k => norm(fields[k]) !== norm(row[k]));
+  if (!cols.length) return false;
+  await c.query(`UPDATE ${table} SET ${cols.map(k => `${k} = ?`).join(', ')} WHERE ${idCol} = ?`, [...cols.map(k => fields[k]), id]);
+  return true;
+}
+
+function companyFields(b) {
+  return { company_type: oneOf(b.type, COMPANY_TYPES, 'company type'), name: cleanText(b.name, 200, 'name', true),
+    investor_type: cleanText(b.investorType, 50, 'investor type'), investment_type: cleanText(b.investmentType, 50, 'investment type'),
+    notes: cleanText(b.notes, 60000, 'notes') };
+}
+function personFields(b) {
+  return { name: cleanText(b.name, 200, 'name', true), email: cleanText(b.email, 254, 'email'), company_id: cleanInt(b.companyId, 'company', true),
+    title: cleanText(b.title, 100, 'title'), phone: cleanText(b.phone, 50, 'phone'), notes: cleanText(b.notes, 60000, 'notes') };
+}
+function interactionFields(b) {
+  const f = { entry_type: oneOf(b.type, ['Interaction', 'Intel'], 'entry type'), interaction_date: cleanDate(b.date, 'date', true),
+    company_id: cleanInt(b.companyId, 'company'), via_company_id: cleanInt(b.viaId, 'via'), format: cleanText(b.format, 20, 'format'),
+    description: cleanText(b.desc, 60000, 'description', true), next_steps: cleanText(b.next, 60000, 'next steps'),
+    recorded_by_person_id: cleanInt(b.recordedBy, 'recorded by') };
+  if (f.entry_type === 'Interaction' && !f.company_id) throw new HttpError(400, 'An interaction needs a company.');
+  return f;
+}
+function actionFields(b) {
+  return { description: cleanText(b.desc, 1000, 'action', true), due_date: cleanDate(b.due, 'due date'), owner_person_id: cleanInt(b.ownerId, 'owner') };
+}
+const insert = async (c, table, f) => {
+  const k = Object.keys(f);
+  const [r] = await c.query(`INSERT INTO ${table} (${k.join(', ')}) VALUES (${k.map(() => '?').join(', ')})`, k.map(x => f[x]));
+  return r.insertId;
+};
+
+/* ---------- Reads ---------- */
+async function getData(c) {
+  const [[companies], [people], [interactions], [links], [actions], [edited]] = await Promise.all([
+    c.query('SELECT * FROM company'), c.query('SELECT * FROM person'), c.query('SELECT * FROM interaction'),
+    c.query('SELECT interaction_id, person_id FROM interaction_person'), c.query('SELECT * FROM action'),
+    c.query("SELECT DISTINCT interaction_id FROM interaction_history WHERE operation = 'UPDATE'")
+  ]);
+  const byIx = new Map();
+  links.forEach(l => { if (!byIx.has(l.interaction_id)) byIx.set(l.interaction_id, []); byIx.get(l.interaction_id).push(l.person_id); });
+  const wasEdited = new Set(edited.map(e => e.interaction_id));
+  return {
+    companies: companies.map(x => ({ id: x.company_id, type: x.company_type, name: x.name, investorType: x.investor_type || '', investmentType: x.investment_type || '', notes: x.notes || '', validFrom: x.valid_from })),
+    people: people.map(x => ({ id: x.person_id, name: x.name, email: x.email || '', companyId: x.company_id, title: x.title || '', phone: x.phone || '', notes: x.notes || '', validFrom: x.valid_from })),
+    interactions: interactions.map(x => ({ id: x.interaction_id, type: x.entry_type, date: x.interaction_date, companyId: x.company_id, viaId: x.via_company_id, format: x.format || '',
+      people: byIx.get(x.interaction_id) || [], recordedBy: x.recorded_by_person_id, desc: x.description, next: x.next_steps || '', review: x.review || '', validFrom: x.valid_from,
+      ...(wasEdited.has(x.interaction_id) ? { updated: x.valid_from.replace(' ', 'T') + 'Z' } : {}) })),
+    actions: actions.map(x => ({ id: x.action_id, desc: x.description, due: x.due_date || '', ownerId: x.owner_person_id, interactionId: x.interaction_id, status: x.status, review: x.review || '', validFrom: x.valid_from }))
+  };
+}
+async function getHistory(c, id) {
+  const [rows] = await c.query(
+    `SELECT v.entry_type, v.interaction_date, co.name AS company, via.name AS via, v.format, v.description, v.next_steps, p.name AS recorded_by, v.changed_by, v.valid_from, v.valid_to
+     FROM interaction_versions v LEFT JOIN company co ON co.company_id = v.company_id LEFT JOIN company via ON via.company_id = v.via_company_id
+     LEFT JOIN person p ON p.person_id = v.recorded_by_person_id WHERE v.interaction_id = ? ORDER BY v.valid_from DESC`, [id]);
+  return { versions: rows };
+}
+
+/* ---------- Writes ---------- */
+async function saveInteraction(c, id, b) {
+  const f = interactionFields(b);
+  if (id) await updateRow(c, 'interaction', 'interaction_id', id, f, b.expectedValidFrom);
+  else id = await insert(c, 'interaction', f);
+
+  const want = new Set(cleanIds(b.people));
+  const [cur] = await c.query('SELECT person_id FROM interaction_person WHERE interaction_id = ? FOR UPDATE', [id]);
+  const have = new Set(cur.map(r => r.person_id));
+  for (const p of want) if (!have.has(p)) await c.query('INSERT INTO interaction_person (interaction_id, person_id) VALUES (?, ?)', [id, p]);
+  for (const p of have) if (!want.has(p)) await c.query('DELETE FROM interaction_person WHERE interaction_id = ? AND person_id = ?', [id, p]);
+
+  const rows = Array.isArray(b.actions) ? b.actions : [];
+  const [existing] = await c.query('SELECT action_id FROM action WHERE interaction_id = ? FOR UPDATE', [id]);
+  const known = new Set(existing.map(r => r.action_id));
+  const kept = new Set();
+  for (const a of rows) {
+    const aid = cleanInt(a.id, 'action id');
+    if (aid) {
+      if (!known.has(aid)) throw new HttpError(400, 'That action does not belong to this entry.');
+      await updateRow(c, 'action', 'action_id', aid, actionFields(a));
+      kept.add(aid);
+    } else await insert(c, 'action', { ...actionFields(a), interaction_id: id, status: 'Open' });
+  }
+  for (const aid of known) if (!kept.has(aid)) await c.query('DELETE FROM action WHERE action_id = ?', [aid]);
+  return { id };
+}
+
+const routes = [
+  ['GET', /^\/api\/data$/, (c) => getData(c)],
+  ['GET', /^\/api\/interactions\/(\d+)\/history$/, (c, m) => getHistory(c, +m[1])],
+  ['POST', /^\/api\/interactions$/, (c, m, b) => saveInteraction(c, null, b), true],
+  ['PUT', /^\/api\/interactions\/(\d+)$/, (c, m, b) => saveInteraction(c, +m[1], b), true],
+  ['POST', /^\/api\/actions$/, async (c, m, b) => ({ id: await insert(c, 'action', { ...actionFields(b), interaction_id: null, status: 'Open' }) }), true],
+  ['PATCH', /^\/api\/actions\/(\d+)$/, async (c, m, b) => {
+    await updateRow(c, 'action', 'action_id', +m[1], { status: oneOf(b.status, ['Open', 'Done', 'Cancelled'], 'status') }, b.expectedValidFrom);
+    return { id: +m[1] };
+  }, true],
+  ['POST', /^\/api\/companies$/, async (c, m, b) => ({ id: await insert(c, 'company', companyFields(b)) }), true],
+  ['PUT', /^\/api\/companies\/(\d+)$/, async (c, m, b) => { await updateRow(c, 'company', 'company_id', +m[1], companyFields(b), b.expectedValidFrom); return { id: +m[1] }; }, true],
+  ['POST', /^\/api\/people$/, async (c, m, b) => ({ id: await insert(c, 'person', personFields(b)) }), true],
+  ['PUT', /^\/api\/people\/(\d+)$/, async (c, m, b) => { await updateRow(c, 'person', 'person_id', +m[1], personFields(b), b.expectedValidFrom); return { id: +m[1] }; }, true]
+];
+
+const reply = (statusCode, body) => ({ statusCode, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }, body: JSON.stringify(body) });
+
+async function handleApi(event) {
+  const user = event.requestContext?.authorizer?.jwt?.claims?.email;
+  if (!user) return reply(401, { error: 'Please sign in.' });
+  const method = event.requestContext.http.method, path = event.rawPath;
+  const route = routes.map(r => ({ r, m: r[0] === method && path.match(r[1]) })).find(x => x.m);
+  if (!route) return reply(404, { error: 'Not found.' });
+  let body = {};
+  try { body = event.body ? JSON.parse(event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body) : {}; }
+  catch { return reply(400, { error: 'The request could not be read.' }); }
+
+  let c;
+  try {
+    c = await connect();
+    const writes = route.r[3];
+    if (writes) { await c.query('SET @crm_user = ?', [user]); await c.beginTransaction(); }
+    const result = await route.r[2](c, route.m, body);
+    if (writes) await c.commit();
+    return reply(200, result);
+  } catch (e) {
+    if (c) await c.rollback().catch(() => {});
+    if (e instanceof HttpError) return reply(e.status, { error: e.message });
+    if (e.errno === 1062) return reply(409, { error: 'That name already exists.' });
+    if ([1451, 1452, 3819].includes(e.errno)) return reply(400, { error: 'That change breaks a data rule, such as a missing or invalid link.' });
+    console.error('request failed', method, path, e.code, e.errno); // no request content in logs
+    return reply(500, { error: 'Something went wrong. Nothing was saved.' });
+  } finally {
+    if (c) await c.end().catch(() => {});
+  }
+}
+
+/* ---------- Nightly CSV backup: every table, plus a manifest with counts ---------- */
+export const BACKUP_TABLES = ['company', 'person', 'interaction', 'interaction_person', 'action',
+  'company_history', 'person_history', 'interaction_history', 'interaction_person_history', 'action_history'];
+
+async function runBackup() {
+  const stamp = new Date().toISOString();
+  const prefix = `${stamp.slice(0, 4)}/${stamp.slice(5, 7)}/${stamp.slice(8, 10)}/`;
+  const s3 = new S3Client({});
+  const put = (Key, Body, ContentType) => s3.send(new PutObjectCommand({ Bucket: BACKUP_BUCKET, Key, Body, ContentType, ChecksumAlgorithm: 'CRC32' }));
+  const c = await connect();
+  const manifest = { exportedAt: stamp, files: {} };
+  try {
+    await c.query('START TRANSACTION WITH CONSISTENT SNAPSHOT');
+    for (const t of BACKUP_TABLES) {
+      const [rows, fields] = await c.query(`SELECT * FROM ${t}`);
+      await put(`${prefix}${t}.csv`, toCsv(fields.map(f => f.name), rows), 'text/csv; charset=utf-8');
+      manifest.files[t] = rows.length;
+    }
+    await c.commit();
+  } finally { await c.end().catch(() => {}); }
+  await put(`${prefix}manifest.json`, JSON.stringify(manifest, null, 2), 'application/json');
+  console.log('backup complete', prefix, JSON.stringify(manifest.files));
+  return manifest;
+}
+
+export const handler = event => (event.backup ? runBackup() : handleApi(event));
