@@ -129,6 +129,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .review-note { font-size: 12.5px; color: var(--warn); }
 .proforma details { font-size: 12.5px; }
 .proforma details ul { margin: 6px 0 0; padding-left: 18px; max-height: 160px; overflow: auto; }
+.proforma h1 { flex-basis: 100%; margin: 12px 0 4px; }
 .proforma .acts-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .proforma .unsaved { display: inline-block; margin-left: 6px; font-weight: 600; color: var(--crit); }
 .pill.intel { background: var(--intel-soft); color: var(--intel); }
@@ -276,11 +277,13 @@ td.num, th.num { text-align: right; }
       <a href="#search" data-view="search">Search</a>
       <a href="#companies" data-view="companies">Companies</a>
       <a href="#people" data-view="people">People</a>
+      <a href="#settings" data-view="settings">Settings</a>
     </nav>
   </div>
 </header>
-<div class="proforma">
+<div class="proforma" id="settings-pane" style="display:none">
   <div class="wrap">
+    <h1>Settings</h1>
     <div id="data-status"></div>
     <div class="acts-row">
       <label class="btn ghost sm" for="import-file" style="cursor:pointer">Import workbook (.xlsx)</label>
@@ -439,12 +442,13 @@ function toast(msg) {
 }
 
 /* ---------- Routing ---------- */
-const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople };
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
 const view = document.getElementById('view');
 function route() {
   let v = location.hash.slice(1);
   if (!VIEWS[v]) v = 'home';
   document.querySelectorAll('nav.tabs a').forEach(a => { if (a.dataset.view === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  document.getElementById('settings-pane').style.display = v === 'settings' ? '' : 'none';
   VIEWS[v]();
 }
 function goto(v) { if (location.hash.slice(1) === v) route(); else location.hash = v; window.scrollTo(0, 0); }
@@ -1378,7 +1382,7 @@ resetBtn.addEventListener('click', () => {
 });
 async function start() {
   if (!LIVE) { renderStatus(); route(); return; }
-  document.querySelector('label[for="import-file"]').hidden = true;
+  document.querySelector('label[for="import-file"]').style.display = 'none'; // imports would not reach the database
   resetBtn.textContent = 'Sign out';
   resetBtn.replaceWith(resetBtn.cloneNode(true));
   document.getElementById('reset').addEventListener('click', signOut);

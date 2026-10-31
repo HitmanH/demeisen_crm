@@ -1,16 +1,17 @@
 # Deploys the CRM to AWS: infrastructure, API code and website. Run from the repository root.
-# Not yet run. Before the first run: enable IAM authentication on the database, and run
-# db/migrations/002_app_user.sql as the admin user.
+# Needed for infrastructure changes; merges to main deploy code and the page automatically.
+# On a new database: enable IAM authentication, and run db/migrations/002_app_user.sql as admin.
 param(
   [Parameter(Mandatory)] [string] $Profile,
   [string] $Region = 'eu-west-2',
-  [string] $Stack = 'demeisen-crm-poc'
+  [string] $Stack = 'demeisen-crm-poc',
+  [string] $AlertEmail # needed on the first run; later runs keep the existing address
 )
 $ErrorActionPreference = 'Stop'
 $A = @('--profile', $Profile, '--region', $Region)
 function Check { if ($LASTEXITCODE -ne 0) { throw 'The last command failed.' } }
 
-aws cloudformation deploy @A --stack-name $Stack --template-file infra/template.yaml --capabilities CAPABILITY_IAM --no-fail-on-empty-changeset; Check
+aws cloudformation deploy @A --stack-name $Stack --template-file infra/template.yaml --capabilities CAPABILITY_NAMED_IAM --no-fail-on-empty-changeset @(if ($AlertEmail) { '--parameter-overrides', "AlertEmail=$AlertEmail" }); Check
 $out = @{}
 aws cloudformation describe-stacks @A --stack-name $Stack --query 'Stacks[0].Outputs' --output json | ConvertFrom-Json | ForEach-Object { $_ } | ForEach-Object { $out[$_.OutputKey] = $_.OutputValue }
 

@@ -1,4 +1,4 @@
-﻿# Demeisen CRM
+# Demeisen CRM
 
 Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and intel, actions, allocator one-pagers and search.
 
@@ -9,7 +9,8 @@ Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and
 
 - `api/`: API and nightly CSV backup, as one AWS Lambda function.
 - `infra/template.yaml`: AWS infrastructure (CloudFormation).
-- `scripts/deploy.ps1`: deploys the infrastructure, API and website. Not yet run.
+- `scripts/deploy.ps1`: deploys the infrastructure, API and website. Needed for infrastructure changes.
+- `.github/workflows/deploy.yml`: on merge to `main`, tests and deploys the API code and page.
 - `db/migrations/002_app_user.sql`: database account for the API.
 - `db/seed/fictional.sql`: fictional test data.
 
