@@ -588,7 +588,7 @@ function actionInputRow(a = null) {
     <input type="date" class="a-due" id="lg-a-due-${i}" aria-label="Due date" value="${esc(a?.due || '')}">
     <button type="button" class="btn ghost sm" data-rm-row>Remove</button></div>`;
 }
-const FORMATS = ['Meeting', 'Call', 'Email', 'Intro', 'Conference', 'Event', 'Feedback', 'Other'];
+const FORMATS = ['Meeting', 'Call', 'Coffee', 'Drink', 'Email', 'Messaging', 'Intro', 'Conference', 'Event', 'Feedback', 'Other'];
 function renderLog() {
   const ed = logEdit != null ? byId(db.interactions, logEdit) : null;
   logEdit = null;
@@ -794,7 +794,7 @@ function allocatorBody(c) {
   const intro = [...its].reverse().find(i => /intro/i.test(i.format || '')) || first;
   const introVia = intro?.viaId ? company(intro.viaId) : null;
   const introBy = intro ? intro.people.map(person).filter(p => p && company(p.companyId)?.type === 'Prime CI').map(p => p.name) : [];
-  const meetings = its.filter(i => /meeting|call/i.test(i.format || '')).length;
+  const meetings = its.filter(i => /meeting|call|coffee|drink/i.test(i.format || '')).length;
   const itIds = new Set(its.map(i => i.id));
   const acts = db.actions.filter(a => itIds.has(a.interactionId));
   const openActs = acts.filter(a => a.status === 'Open').sort(byDue);
@@ -840,7 +840,7 @@ function allocatorBody(c) {
 
     <div class="tiles">
       <div class="panel tile"><span class="n date">${last ? fmt(last.date) : 'None'}</span><span class="lbl">Last contact</span><span class="small">${last ? agoLabel(last.date) : 'No entries yet'}</span></div>
-      <div class="panel tile"><span class="n">${its.length}</span><span class="lbl">Entries</span><span class="small">${meetings} meetings &amp; calls · ${intel.length} intel</span></div>
+      <div class="panel tile"><span class="n">${its.length}</span><span class="lbl">Entries</span><span class="small">${meetings} meetings, calls, coffees &amp; drinks ·${intel.length} intel</span></div>
       <div class="panel tile"><span class="n">${contacts.length}</span><span class="lbl">Contacts</span><span class="small">${contacts.filter(x => x.n).length} met or emailed</span></div>
       <div class="panel tile ${openActs.some(a => bucket(a) === 'overdue') ? 'crit' : ''}"><span class="n">${openActs.length}</span><span class="lbl">Open actions</span><span class="small">${openActs.filter(a => bucket(a) === 'overdue').length} overdue</span></div>
     </div>
