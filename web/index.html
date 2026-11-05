@@ -905,7 +905,8 @@ function renderInteractions() {
   const count = t => db.interactions.filter(i => t === 'all' || i.type === t).length;
   view.innerHTML = `
     <div class="pagehead"><div><h1>Interactions &amp; intel</h1><p class="sub">Everything logged, newest first. Click a row to see the full entry.</p></div>
-      <a class="btn" href="#log">Log interaction / intel</a></div>
+      <div class="toolbar"><a class="btn" href="#log">Log interaction / intel</a>
+        <button type="button" class="btn ghost" id="ix-contacts" data-pe-co="${esc(ixState.company)}">Contacts</button></div></div>
     <div class="stack">
       <div class="toolbar">
         <div class="seg" role="radiogroup" aria-label="Show">
@@ -920,7 +921,7 @@ function renderInteractions() {
         <tbody id="ix-body"></tbody></table></div>
     </div>`;
   view.querySelectorAll('input[name="ix-type"]').forEach(r => r.addEventListener('change', () => { ixState.type = r.value; renderIxBody(); }));
-  view.querySelector('#ix-co').addEventListener('change', e => { ixState.company = e.target.value; renderIxBody(); });
+  view.querySelector('#ix-co').addEventListener('change', e => { ixState.company = e.target.value; view.querySelector('#ix-contacts').dataset.peCo = e.target.value; renderIxBody(); });
   const body = view.querySelector('#ix-body');
   const toggle = tr => { const id = +tr.dataset.ix; ixState.open.has(id) ? ixState.open.delete(id) : ixState.open.add(id); renderIxBody(); body.querySelector(`[data-ix="${id}"]`)?.focus(); };
   body.addEventListener('click', e => {
@@ -1302,6 +1303,8 @@ view.addEventListener('click', e => {
   if (ixc) { e.preventDefault(); ixState = { type: 'all', company: ixc.dataset.ixCo, open: new Set(), focus: null }; goto('interactions'); return; }
   const lg = e.target.closest('[data-log-co]');
   if (lg) { e.preventDefault(); logPrefill = +lg.dataset.logCo; goto('log'); return; }
+  const pc = e.target.closest('[data-pe-co]');
+  if (pc) { e.preventDefault(); peFilter = pc.dataset.peCo; peEdit = null; goto('people'); return; }
   const ed = e.target.closest('[data-edit-int]');
   if (ed) { e.preventDefault(); logEdit = +ed.dataset.editInt; goto('log'); return; }
   const hi = e.target.closest('[data-history]');
