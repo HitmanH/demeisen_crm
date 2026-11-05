@@ -890,7 +890,8 @@ function allocatorBody(c) {
             <div class="sec-foot hint">Picked up from the wording of your notes, so check before relying on it.</div>` : '<div class="empty">Nothing detected in the notes yet.</div>'}
         </section>` : ''}
         <section class="panel">
-          <div class="sec-head"><h2>Contacts</h2><a href="#people" class="linkbtn">People</a></div>
+          <div class="sec-head"><h2>Contacts</h2><span><button type="button" class="btn ghost sm" data-pe-new="${c.id}">Add person</button>
+            <button type="button" class="linkbtn" data-pe-co="${c.id}">People</button></span></div>
           ${contacts.length ? `<div class="tbl-wrap"><table class="small-tbl"><thead><tr><th>Name</th><th class="num">Entries</th><th>Last</th></tr></thead>
             <tbody>${contacts.map(x => `<tr><td><strong>${esc(x.p.name)}</strong>${x.p.notes ? `<div class="muted" style="font-size:12px">${esc(x.p.notes)}</div>` : ''}</td><td class="num">${x.n}</td><td class="mono">${x.last ? fmt(x.last) : ''}</td></tr>`).join('')}</tbody></table></div>`
             : '<div class="empty">No contacts recorded.</div>'}
@@ -1083,8 +1084,8 @@ function renderCompanies() {
       <div class="panel tbl-wrap"><table>
         <thead><tr><th>Company</th><th>Type</th><th>Investor type</th><th>Investment type</th><th class="num">People</th><th>Last contact</th><th class="num">Open actions</th><th></th></tr></thead>
         <tbody>${rows.map(c => { const s = stats(c); return `<tr>
-          <td><strong>${esc(c.name)}</strong></td><td><span class="pill ${tcls(c.type)}">${esc(c.type)}</span></td><td>${esc(c.investorType)}</td><td>${esc(c.investmentType)}</td>
-          <td class="num">${s.people}</td><td class="mono">${s.last ? fmt(s.last) : '<span class="muted">None</span>'}</td><td class="num">${s.open}</td>
+          <td>${c.type !== 'Demeisen' ? `<button type="button" class="linkbtn" data-filter-co="${c.id}" title="Open ${esc(c.name)} one-pager"><strong>${esc(c.name)}</strong></button>` : `<strong>${esc(c.name)}</strong>`}</td><td><span class="pill ${tcls(c.type)}">${esc(c.type)}</span></td><td>${esc(c.investorType)}</td><td>${esc(c.investmentType)}</td>
+          <td class="num"><button type="button" class="linkbtn" data-pe-co="${c.id}" title="Show ${esc(c.name)} people">${s.people}</button></td><td class="mono">${s.last ? fmt(s.last) : '<span class="muted">None</span>'}</td><td class="num">${s.open}</td>
           <td style="white-space:nowrap;text-align:right">${c.type !== 'Demeisen' ? `<button type="button" class="btn ghost sm" data-filter-co="${c.id}">One-pager</button>` : ''}<button type="button" class="btn ghost sm" data-co-edit="${c.id}">Edit</button></td></tr>`; }).join('')}
         </tbody></table></div>
     </div>`;
@@ -1114,7 +1115,7 @@ function renderCompanies() {
 }
 
 /* ---------- People ---------- */
-let peEdit = null, peFilter = '';
+let peEdit = null, peFilter = '', peFocusName = false;
 function renderPeople() {
   const editing = peEdit === 'new' ? { id: null, name: '', email: '', companyId: +peFilter || null, title: '', phone: '' } : peEdit ? person(peEdit) : null;
   const rows = db.people.filter(p => !peFilter || p.companyId === +peFilter)
@@ -1150,6 +1151,7 @@ function renderPeople() {
     </div>`;
   view.querySelector('#pe-filter').addEventListener('change', e => { peFilter = e.target.value; renderPeople(); });
   view.querySelector('#pe-new').addEventListener('click', () => { peEdit = 'new'; renderPeople(); view.querySelector('#pe-name').focus(); });
+  if (peFocusName) { peFocusName = false; view.querySelector('#pe-name')?.focus(); } // opened from a company's Add person
   view.querySelectorAll('[data-pe-edit]').forEach(b => b.addEventListener('click', () => { peEdit = +b.dataset.peEdit; renderPeople(); window.scrollTo(0, 0); }));
   if (editing) {
     view.querySelector('#pe-cancel').addEventListener('click', () => { peEdit = null; renderPeople(); });
@@ -1322,6 +1324,8 @@ view.addEventListener('click', e => {
   if (lg) { e.preventDefault(); logPrefill = +lg.dataset.logCo; goto('log'); return; }
   const pc = e.target.closest('[data-pe-co]');
   if (pc) { e.preventDefault(); peFilter = pc.dataset.peCo; peEdit = null; goto('people'); return; }
+  const pn = e.target.closest('[data-pe-new]');
+  if (pn) { e.preventDefault(); peFilter = pn.dataset.peNew; peEdit = 'new'; peFocusName = true; goto('people'); return; }
   const ed = e.target.closest('[data-edit-int]');
   if (ed) { e.preventDefault(); logEdit = +ed.dataset.editInt; goto('log'); return; }
   const hi = e.target.closest('[data-history]');
