@@ -75,10 +75,19 @@ nav.tabs { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 
 nav.tabs a { padding: 8px 12px; border-radius: var(--r); color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
 nav.tabs a:hover { color: var(--ink); background: var(--hover); }
 nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+/* Drop-down group in the second row; highlighted while one of its pages is open */
+nav.tabs .menu { position: relative; }
+nav.tabs summary { list-style: none; cursor: pointer; padding: 8px 12px; border-radius: var(--r); color: var(--muted); font-weight: 500; white-space: nowrap; }
+nav.tabs summary::-webkit-details-marker { display: none; }
+nav.tabs summary::after { content: '▾'; font-size: 11px; margin-left: 6px; }
+nav.tabs summary:hover { color: var(--ink); background: var(--hover); }
+nav.tabs .menu.has-current summary { background: var(--accent-soft); color: var(--accent); }
+nav.tabs .menu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 10; min-width: 180px; display: flex; flex-direction: column; gap: 2px;
+  padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
 @media (max-width: 900px) {
   header.top { position: static; }
   header.top .wrap { gap: 8px; }
-  nav.tabs a { padding: 6px 10px; }
+  nav.tabs a, nav.tabs summary { padding: 6px 10px; }
 }
 .proforma { background: var(--intel-soft); border-bottom: 1px solid var(--line); font-size: 12.5px; }
 .proforma .wrap { padding-block: 6px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
@@ -275,14 +284,18 @@ td.num, th.num { text-align: right; }
         <a href="#todo" data-view="todo">To-do</a>
         <a href="#interactions" data-view="interactions">Interactions</a>
         <a href="#allocator" data-view="allocator">External Party One Pager</a>
-        <a href="#cilead" data-view="cilead">CI Lead</a>
         <a href="#log" data-view="log">Log interaction / intel</a>
         <a href="#search" data-view="search">Search</a>
       </div>
       <div class="tab-row">
-        <a href="#pairings" data-view="pairings">Counterparty Pairings</a>
-        <a href="#companies" data-view="companies">Companies</a>
-        <a href="#people" data-view="people">People</a>
+        <details class="menu"><summary>Static Data</summary>
+          <div class="menu-list">
+            <a href="#companies" data-view="companies">Companies</a>
+            <a href="#people" data-view="people">People</a>
+            <a href="#pairings" data-view="pairings">Connections</a>
+            <a href="#cilead" data-view="cilead">CI Lead</a>
+          </div>
+        </details>
         <a href="#settings" data-view="settings">Settings</a>
       </div>
     </nav>
@@ -457,9 +470,13 @@ function route() {
   let v = location.hash.slice(1);
   if (!VIEWS[v]) v = 'home';
   document.querySelectorAll('nav.tabs a').forEach(a => { if (a.dataset.view === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  document.querySelectorAll('nav.tabs .menu').forEach(m => { m.open = false; m.classList.toggle('has-current', !!m.querySelector(`a[data-view="${v}"]`)); });
   document.getElementById('settings-pane').style.display = v === 'settings' ? '' : 'none';
   VIEWS[v]();
 }
+// The Static Data menu closes on a click elsewhere, on Escape, or when a page is chosen (see route).
+document.addEventListener('click', e => { document.querySelectorAll('nav.tabs .menu[open]').forEach(m => { if (!m.contains(e.target) || e.target.closest('.menu-list a')) m.open = false; }); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('nav.tabs .menu[open]').forEach(m => { m.open = false; m.querySelector('summary').focus(); }); });
 function goto(v) { if (location.hash.slice(1) === v) route(); else location.hash = v; window.scrollTo(0, 0); }
 window.addEventListener('hashchange', () => { if (LIVE && !idToken()) return; route(); window.scrollTo(0, 0); });
 
