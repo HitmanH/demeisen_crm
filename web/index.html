@@ -1205,7 +1205,7 @@ function ciLeads(allocatorId) {
   const first = via.reduce((m, i) => (!m || i.date < m ? i.date : m), '');
   return [...new Set(via.filter(i => i.date === first).map(i => i.viaId))].map(ciId => ({ ciId, basis: 'Earliest entry', entryDate: first }));
 }
-let ciId = null;
+let ciId = null, ciEdit = null;
 function renderCiLead() {
   const cis = db.companies.filter(c => c.type === 'Prime CI').sort((a, b) => a.name.localeCompare(b.name));
   if (!cis.some(c => c.id === ciId)) ciId = cis[0]?.id || null;
@@ -1222,24 +1222,34 @@ function renderCiLead() {
   view.innerHTML = `
     <div class="pagehead"><div><h1>CI Lead</h1><p class="sub">Allocators a cap intro counterparty leads, with the latest interaction on each. Where no lead is set, this uses the initial connection, then the earliest entry with a Prime CI.</p></div>
       <div class="toolbar"><label class="lbl" for="ci-co">Prime CI</label>
-        <select id="ci-co">${cis.map(c => `<option value="${c.id}" ${c.id === ciId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div></div>
+        <select id="ci-co">${cis.map(c => `<option value="${c.id}" ${c.id === ciId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+        <button type="button" class="btn" id="ci-new">Add relationship</button></div></div>
     <div class="stack">
+      ${ciEdit ? pairingFormHtml(ciEdit) : ''}
       <div class="tiles">
         <div class="panel tile"><span class="n">${rows.length}</span><span class="lbl">Allocators</span><span class="small">${unassigned} with no Prime CI at all</span></div>
-        <div class="panel tile"><span class="n">${count('Relationship Lead')}</span><span class="lbl">Relationship Lead</span><span class="small">Set on Counterparty Pairings</span></div>
+        <div class="panel tile"><span class="n">${count('Relationship Lead')}</span><span class="lbl">Relationship Lead</span><span class="small">Set here or under Connections</span></div>
         <div class="panel tile"><span class="n">${count('Initial Connection')}</span><span class="lbl">Initial Connection</span><span class="small">No lead set</span></div>
         <div class="panel tile"><span class="n">${count('Earliest entry')}</span><span class="lbl">Earliest entry</span><span class="small">No lead or initial connection set</span></div>
       </div>
       <div class="panel tbl-wrap"><table class="ix-table">
-        <thead><tr><th>Allocator</th><th>Why listed</th><th>Connection</th><th>Latest</th><th>Format</th><th>Latest interaction</th></tr></thead>
+        <thead><tr><th>Allocator</th><th>Why listed</th><th>Connection</th><th>Latest</th><th>Format</th><th>Latest interaction</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(r => `<tr>
           <td>${coPill(r.c)}</td><td class="nowrap">${esc(r.basis)}</td><td>${how(r)}</td>
           <td class="mono nowrap">${r.last ? fmt(r.last.date) : '<span class="muted">None</span>'}</td><td>${esc(r.last?.format)}</td>
-          <td>${r.last ? `<a href="#" class="clamp" data-open-int="${r.last.id}">${esc(r.last.desc)}</a>` : ''}</td></tr>`).join('')
-          : '<tr><td colspan="6" class="muted">No allocators for this Prime CI yet.</td></tr>'}
+          <td>${r.last ? `<a href="#" class="clamp" data-open-int="${r.last.id}">${esc(r.last.desc)}</a>` : ''}</td>
+          <td style="text-align:right;white-space:nowrap">${r.basis === 'Relationship Lead' ? `<button type="button" class="btn ghost sm" data-ci-edit="${r.pairing.id}">Edit</button>`
+            : `<button type="button" class="btn ghost sm" data-ci-lead="${r.c.id}">Set as lead</button>`}</td></tr>`).join('')
+          : '<tr><td colspan="7" class="muted">No allocators for this Prime CI yet. Use Add relationship to record one.</td></tr>'}
         </tbody></table></div>
     </div>`;
-  view.querySelector('#ci-co').addEventListener('change', e => { ciId = +e.target.value; renderCiLead(); });
+  const blank = allocatorId => ({ id: null, allocatorId, counterpartyId: ciId, connection: 'Relationship Lead', detail: '', date: '' });
+  const open = e => { ciEdit = e; renderCiLead(); window.scrollTo(0, 0); view.querySelector(e.allocatorId ? '#pa-detail' : '#pa-al').focus(); };
+  view.querySelector('#ci-co').addEventListener('change', e => { ciId = +e.target.value; ciEdit = null; renderCiLead(); });
+  view.querySelector('#ci-new').addEventListener('click', () => open(blank(null)));
+  view.querySelectorAll('[data-ci-lead]').forEach(b => b.addEventListener('click', () => open(blank(+b.dataset.ciLead))));
+  view.querySelectorAll('[data-ci-edit]').forEach(b => b.addEventListener('click', () => open(byId(db.pairings, +b.dataset.ciEdit))));
+  if (ciEdit) wirePairingForm(ciEdit, msg => { ciEdit = null; renderCiLead(); if (msg) toast(msg); });
 }
 
 /* ---------- Counterparty pairings ---------- */
@@ -1251,13 +1261,9 @@ function renderPairings() {
   const coN = id => company(id)?.name || '';
   const rows = db.pairings.filter(p => (!paConn || p.connection === paConn) && (!paAllocator || p.allocatorId === +paAllocator) && (!paCounterparty || p.counterpartyId === +paCounterparty))
     .sort((a, b) => coN(a.allocatorId).localeCompare(coN(b.allocatorId)) || coN(a.counterpartyId).localeCompare(coN(b.counterpartyId)) || a.connection.localeCompare(b.connection));
-  const connections = [...new Set([...PAIRING_CONNECTIONS, ...db.pairings.map(p => p.connection)])].sort((a, b) => a.localeCompare(b));
+  const connections = pairingConnections();
   const filterOpts = (key, sel) => [...new Set(db.pairings.map(p => p[key]))].sort((a, b) => coN(a).localeCompare(coN(b)))
     .map(id => `<option value="${id}" ${id === +sel ? 'selected' : ''}>${esc(coN(id))}</option>`).join('');
-  const typedOpts = (types, sel) => types.map(t => {
-    const cs = db.companies.filter(c => c.type === t).sort((a, b) => a.name.localeCompare(b.name));
-    return cs.length ? `<optgroup label="${t}">${cs.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : '';
-  }).join('');
   view.innerHTML = `
     <div class="pagehead"><div><h1>Counterparty Pairings</h1><p class="sub">How each Prime CI is involved with each allocator. ${rows.length} of ${db.pairings.length} shown.</p></div>
       <div class="toolbar">
@@ -1269,19 +1275,7 @@ function renderPairings() {
         <select id="pa-f-cp"><option value="">All</option>${filterOpts('counterpartyId', paCounterparty)}</select>
         <button type="button" class="btn" id="pa-new">Add pairing</button></div></div>
     <div class="stack">
-      ${editing ? `<form class="panel edit-panel" id="pa-form">
-        <h2>${editing.id ? 'Edit pairing' : 'New pairing'}</h2>
-        <div class="fgrid">
-          <div class="field"><label class="lbl" for="pa-al">Allocator</label><select id="pa-al"><option value="">Choose an allocator</option>${typedOpts(['Investor', 'Other'], editing.allocatorId)}</select></div>
-          <div class="field"><label class="lbl" for="pa-cp">Prime CI</label><select id="pa-cp"><option value="">Choose a Prime CI</option>${typedOpts(['Prime CI', 'Other'], editing.counterpartyId)}</select></div>
-          <div class="field"><label class="lbl" for="pa-conn">Connection</label><input type="text" id="pa-conn" list="pa-conn-list" maxlength="50" value="${esc(editing.connection)}" placeholder="Choose or type a connection">
-            <datalist id="pa-conn-list">${connections.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
-          <div class="field"><label class="lbl" for="pa-detail">Detail <em>(optional)</em></label><input type="text" id="pa-detail" maxlength="200" value="${esc(editing.detail)}"></div>
-          <div class="field"><label class="lbl" for="pa-date">Month <em>(optional)</em></label><input type="month" id="pa-date" value="${esc((editing.date || '').slice(0, 7))}"></div>
-        </div>
-        <div class="form-actions"><button class="btn" type="submit">Save pairing</button><button type="button" class="btn ghost" id="pa-cancel">Cancel</button>
-          ${editing.id ? '<button type="button" class="btn ghost" id="pa-delete">Delete pairing</button>' : ''}<span class="form-error" id="pa-err" role="alert"></span></div>
-      </form>` : ''}
+      ${editing ? pairingFormHtml(editing) : ''}
       <div class="panel tbl-wrap"><table>
         <thead><tr><th>Allocator</th><th>Prime CI</th><th>Connection</th><th>Detail</th><th>Date</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(p => `<tr>
@@ -1295,10 +1289,35 @@ function renderPairings() {
   view.querySelector('#pa-f-cp').addEventListener('change', e => { paCounterparty = e.target.value; renderPairings(); });
   view.querySelector('#pa-new').addEventListener('click', () => { paEdit = 'new'; renderPairings(); view.querySelector('#pa-al').focus(); });
   view.querySelectorAll('[data-pa-edit]').forEach(b => b.addEventListener('click', () => { paEdit = +b.dataset.paEdit; renderPairings(); window.scrollTo(0, 0); }));
-  if (!editing) return;
+  if (editing) wirePairingForm(editing, msg => { paEdit = null; renderPairings(); if (msg) toast(msg); });
+}
+
+// The pairing form, shared by Counterparty Pairings and CI Lead. close(msg) leaves the form; msg is empty on Cancel.
+const pairingConnections = () => [...new Set([...PAIRING_CONNECTIONS, ...db.pairings.map(p => p.connection)])].sort((a, b) => a.localeCompare(b));
+function pairingFormHtml(editing) {
+  const typedOpts = (types, sel) => types.map(t => {
+    const cs = db.companies.filter(c => c.type === t).sort((a, b) => a.name.localeCompare(b.name));
+    return cs.length ? `<optgroup label="${t}">${cs.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : '';
+  }).join('');
+  return `<form class="panel edit-panel" id="pa-form">
+        <h2>${editing.id ? 'Edit pairing' : 'New pairing'}</h2>
+        <div class="fgrid">
+          <div class="field"><label class="lbl" for="pa-al">Allocator</label><select id="pa-al"><option value="">Choose an allocator</option>${typedOpts(['Investor', 'Other'], editing.allocatorId)}</select></div>
+          <div class="field"><label class="lbl" for="pa-cp">Prime CI</label><select id="pa-cp"><option value="">Choose a Prime CI</option>${typedOpts(['Prime CI', 'Other'], editing.counterpartyId)}</select></div>
+          <div class="field"><label class="lbl" for="pa-conn">Connection</label><input type="text" id="pa-conn" list="pa-conn-list" maxlength="50" value="${esc(editing.connection)}" placeholder="Choose or type a connection">
+            <datalist id="pa-conn-list">${pairingConnections().map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+          <div class="field"><label class="lbl" for="pa-detail">Detail <em>(optional)</em></label><input type="text" id="pa-detail" maxlength="200" value="${esc(editing.detail)}"></div>
+          <div class="field"><label class="lbl" for="pa-date">Month <em>(optional)</em></label><input type="month" id="pa-date" value="${esc((editing.date || '').slice(0, 7))}"></div>
+        </div>
+        <div class="form-actions"><button class="btn" type="submit">Save pairing</button><button type="button" class="btn ghost" id="pa-cancel">Cancel</button>
+          ${editing.id ? '<button type="button" class="btn ghost" id="pa-delete">Delete pairing</button>' : ''}<span class="form-error" id="pa-err" role="alert"></span></div>
+      </form>`;
+}
+function wirePairingForm(editing, close) {
+  const connections = pairingConnections();
   const err = view.querySelector('#pa-err');
-  const done = msg => { paEdit = null; renderPairings(); toast(msg); };
-  view.querySelector('#pa-cancel').addEventListener('click', () => { paEdit = null; renderPairings(); });
+  const done = msg => close(msg);
+  view.querySelector('#pa-cancel').addEventListener('click', () => close(''));
   view.querySelector('#pa-delete')?.addEventListener('click', () => {
     if (!confirm('Delete this pairing?')) return;
     if (LIVE) { liveWrite(async () => { await api('DELETE', `/api/pairings/${editing.id}`); await reloadData(); done('Pairing deleted'); }, err); return; }
