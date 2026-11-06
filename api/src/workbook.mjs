@@ -10,14 +10,14 @@ const xdt = s => { if (!s) return ''; const d = new Date(s); return Date.UTC(d.g
 
 export const WORKBOOK_COLUMNS = {
   Company: ['Company ID', 'Company Type', 'Company Name', 'Investor Type', 'Investment Type', 'Notes'],
-  Person: ['Person ID', 'Person Name', 'Person Email', 'Company Name', 'Title', 'Phone', 'Notes'],
+  Person: ['Person ID', 'Person Name', 'Person Email', 'Company Name', 'Title', 'Phone', 'Personal Email', 'LinkedIn', 'Notes'],
   Interaction: ['Interaction ID', 'Entry Type', 'Interaction Date', 'Company Name', 'Format', 'Via (Prime CI)', 'People Involved', 'Interaction Desc',
     'Interaction Next Steps', 'Recorded By', 'Review', 'Last Updated', 'People Involved IDs', 'Recorded By ID'],
   Action: ['Action ID', 'Action Desc', 'Action Due Date', 'Status', 'Owner', 'Interaction ID', 'Company', 'Review', 'Owner ID'],
   'Counterparty Pairing': ['Pairing ID', 'Allocator', 'Prime CI', 'Connection', 'Detail', 'Date']
 };
 const WIDTHS = {
-  Company: [11, 13, 36, 18, 18, 60], Person: [10, 26, 32, 34, 20, 16, 46],
+  Company: [11, 13, 36, 18, 18, 60], Person: [10, 26, 32, 34, 20, 16, 32, 40, 46],
   Interaction: [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18, 16, 12], Action: [10, 62, 15, 10, 15, 13, 30, 40, 10],
   'Counterparty Pairing': [10, 36, 36, 30, 36, 10]
 };
@@ -46,7 +46,8 @@ export function buildWorkbook(data) {
   XLSX.utils.book_append_sheet(wb, sheet('Company', sortId(data.companies).map(c => ({ 'Company ID': c.id, 'Company Type': c.type, 'Company Name': c.name,
     'Investor Type': c.investorType || '', 'Investment Type': c.investmentType || '', 'Notes': c.notes || '' }))), 'Company');
   XLSX.utils.book_append_sheet(wb, sheet('Person', sortId(data.people).map(p => ({ 'Person ID': p.id, 'Person Name': p.name, 'Person Email': p.email || '',
-    'Company Name': coName(p.companyId), 'Title': p.title || '', 'Phone': p.phone || '', 'Notes': p.notes || '' }))), 'Person');
+    'Company Name': coName(p.companyId), 'Title': p.title || '', 'Phone': p.phone || '',
+    'Personal Email': p.personalEmail || '', 'LinkedIn': p.linkedin || '', 'Notes': p.notes || '' }))), 'Person');
   XLSX.utils.book_append_sheet(wb, sheet('Interaction', [...data.interactions].sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id - b.id).map(i => ({
     'Interaction ID': i.id, 'Entry Type': i.type, 'Interaction Date': xd(i.date), 'Company Name': coName(i.companyId), 'Format': i.format || '',
     'Via (Prime CI)': coName(i.viaId), 'People Involved': i.people.map(pName).filter(Boolean).join('; '), 'Interaction Desc': i.desc,

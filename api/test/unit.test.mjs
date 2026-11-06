@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import * as XLSX from 'xlsx';
 import { toCsv } from '../src/csv.mjs';
 import { buildWorkbook, WORKBOOK_COLUMNS } from '../src/workbook.mjs';
-import { cleanText, cleanInt, cleanDate, oneOf, cleanIds, HttpError } from '../src/validate.mjs';
+import { cleanText, cleanInt, cleanDate, cleanUrl, oneOf, cleanIds, HttpError } from '../src/validate.mjs';
 
 test('csv quotes commas, quotes and line breaks and keeps blanks', () => {
   const out = toCsv(['a', 'b'], [{ a: 'x,y', b: 'say "hi"' }, { a: 'line\nbreak', b: null }]);
@@ -64,6 +64,14 @@ test('dates must be real calendar dates', () => {
   assert.equal(cleanDate('', 'x'), null);
   assert.throws(() => cleanDate('2026-02-30', 'x'), HttpError);
   assert.throws(() => cleanDate('28/02/2026', 'x'), HttpError);
+});
+test('web links get https:// and must be plain web addresses', () => {
+  assert.equal(cleanUrl('linkedin.com/in/example', 300, 'x'), 'https://linkedin.com/in/example');
+  assert.equal(cleanUrl('https://www.linkedin.com/in/example/', 300, 'x'), 'https://www.linkedin.com/in/example/');
+  assert.equal(cleanUrl('  ', 300, 'x'), null);
+  assert.throws(() => cleanUrl('javascript:alert(1)', 300, 'x'), HttpError);
+  assert.throws(() => cleanUrl('not a link', 300, 'x'), HttpError);
+  assert.throws(() => cleanUrl('https://example.com/' + 'a'.repeat(300), 300, 'x'), HttpError);
 });
 test('allowed values and id lists', () => {
   assert.equal(oneOf('Open', ['Open'], 'x'), 'Open');

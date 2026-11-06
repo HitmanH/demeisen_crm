@@ -1116,8 +1116,15 @@ function renderCompanies() {
 
 /* ---------- People ---------- */
 let peEdit = null, peFilter = '', peFocusName = false;
+// A web address with https:// added if missing, or '' when it is not a plain web link (so no other kind of link is ever made).
+function webLink(s) {
+  s = (s || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  try { const u = new URL(s); return /^https?:$/.test(u.protocol) && u.hostname.includes('.') && !/\s/.test(s) ? s : ''; } catch { return ''; }
+}
 function renderPeople() {
-  const editing = peEdit === 'new' ? { id: null, name: '', email: '', companyId: +peFilter || null, title: '', phone: '' } : peEdit ? person(peEdit) : null;
+  const editing = peEdit === 'new' ? { id: null, name: '', email: '', companyId: +peFilter || null, title: '', phone: '', personalEmail: '', linkedin: '' } : peEdit ? person(peEdit) : null;
   const rows = db.people.filter(p => !peFilter || p.companyId === +peFilter)
     .sort((a, b) => (company(a.companyId)?.name || '').localeCompare(company(b.companyId)?.name || '') || a.name.localeCompare(b.name));
   const emailOk = e => !e || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
@@ -1131,22 +1138,26 @@ function renderPeople() {
         <h2>${editing.id ? 'Edit ' + esc(editing.name) : 'New person'}</h2>
         <div class="fgrid">
           <div class="field"><label class="lbl" for="pe-name">Name</label><input type="text" id="pe-name" value="${esc(editing.name)}"></div>
-          <div class="field"><label class="lbl" for="pe-email">Email</label><input type="email" id="pe-email" value="${esc(editing.email)}"></div>
+          <div class="field"><label class="lbl" for="pe-email">Work email</label><input type="email" id="pe-email" value="${esc(editing.email)}"></div>
           <div class="field"><label class="lbl" for="pe-co">Company</label><select id="pe-co"><option value="">Choose a company</option>${companyOpts(editing.companyId, { excludeDemeisen: false })}</select></div>
           <div class="field"><label class="lbl" for="pe-title">Job title <em>(optional)</em></label><input type="text" id="pe-title" value="${esc(editing.title)}"></div>
           <div class="field"><label class="lbl" for="pe-phone">Phone <em>(optional)</em></label><input type="tel" id="pe-phone" value="${esc(editing.phone)}"></div>
+          <div class="field"><label class="lbl" for="pe-pemail">Personal email <em>(optional)</em></label><input type="email" id="pe-pemail" value="${esc(editing.personalEmail)}"></div>
+          <div class="field"><label class="lbl" for="pe-linkedin">LinkedIn profile <em>(optional)</em></label><input type="text" inputmode="url" id="pe-linkedin" value="${esc(editing.linkedin)}" placeholder="linkedin.com/in/…"></div>
         </div>
         <div class="form-actions"><button class="btn" type="submit">Save person</button><button type="button" class="btn ghost" id="pe-cancel">Cancel</button><span class="form-error" id="pe-err" role="alert"></span></div>
       </form>` : ''}
       <div class="panel tbl-wrap"><table>
-        <thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Job title</th><th class="num">Interactions</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Job title</th><th class="num">Interactions</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(p => { const c = company(p.companyId); return `<tr>
-          <td><strong>${esc(p.name)}</strong></td>
-          <td class="mono">${esc(p.email)}${emailOk(p.email) ? '' : '<span class="warn-note">check domain</span>'}</td>
+          <td><strong>${esc(p.name)}</strong>${webLink(p.linkedin) ? `<div><a href="${esc(webLink(p.linkedin))}" target="_blank" rel="noopener noreferrer" style="font-size:12px">LinkedIn</a></div>` : ''}</td>
+          <td class="mono">${esc(p.email)}${emailOk(p.email) ? '' : '<span class="warn-note">check domain</span>'}
+            ${p.personalEmail ? `<div class="muted" style="font-size:12px">Personal: ${esc(p.personalEmail)}</div>` : ''}</td>
+          <td class="mono nowrap">${esc(p.phone)}</td>
           <td>${c ? `<span class="pill ${tcls(c.type)}">${esc(c.name)}</span>` : '<span class="muted">None</span>'}</td><td>${esc(p.title)}</td>
           <td class="num">${db.interactions.filter(i => i.people.includes(p.id)).length}</td>
           <td style="text-align:right"><button type="button" class="btn ghost sm" data-pe-edit="${p.id}">Edit</button></td></tr>`; }).join('')
-          : '<tr><td colspan="6" class="muted">No people for this company yet.</td></tr>'}
+          : '<tr><td colspan="7" class="muted">No people for this company yet.</td></tr>'}
         </tbody></table></div>
     </div>`;
   view.querySelector('#pe-filter').addEventListener('change', e => { peFilter = e.target.value; renderPeople(); });
@@ -1164,7 +1175,11 @@ function renderPeople() {
       if (!name) { err.textContent = 'Add the person’s name.'; return; }
       if (!companyId) { err.textContent = 'Choose which company they work at.'; return; }
       if (email && db.people.some(p => p.email.toLowerCase() === email.toLowerCase() && p.id !== editing.id)) { err.textContent = 'Another person already has that email.'; return; }
-      const rec = { name, email, companyId, title: view.querySelector('#pe-title').value.trim(), phone: view.querySelector('#pe-phone').value.trim() };
+      const personalEmail = view.querySelector('#pe-pemail').value.trim(), linkedinIn = view.querySelector('#pe-linkedin').value.trim();
+      if (!emailOk(personalEmail)) { err.textContent = 'Check the personal email address.'; return; }
+      const linkedin = linkedinIn ? webLink(linkedinIn) : '';
+      if (linkedinIn && !linkedin) { err.textContent = 'Check the LinkedIn link, for example linkedin.com/in/name.'; return; }
+      const rec = { name, email, companyId, title: view.querySelector('#pe-title').value.trim(), phone: view.querySelector('#pe-phone').value.trim(), personalEmail, linkedin };
       if (LIVE) {
         liveWrite(async () => {
           await api(editing.id ? 'PUT' : 'POST', editing.id ? `/api/people/${editing.id}` : '/api/people', { ...rec, notes: editing.notes, expectedValidFrom: editing.validFrom });
@@ -1404,7 +1419,8 @@ function importWorkbook(buf, filename) {
     const co = coByName.get(lc(coName));
     if (!co) { warn.push(`Person "${name}" skipped: company "${coName}" is not on the Company tab.`); return; }
     people.push({ id: +col(r, 'Person ID') || 100000 + i, name, email: str(col(r, 'Person Email')), companyId: co.id,
-      title: str(col(r, 'Title', 'Job Title')), phone: str(col(r, 'Phone')), notes: str(col(r, 'Notes')) });
+      title: str(col(r, 'Title', 'Job Title')), phone: str(col(r, 'Phone')), personalEmail: str(col(r, 'Personal Email')), linkedin: webLink(str(col(r, 'LinkedIn'))),
+      notes: str(col(r, 'Notes')) });
   });
   const pByName = new Map(people.map(p => [lc(p.name), p]));
 
@@ -1517,7 +1533,8 @@ function buildWorkbook() {
   XLSX.utils.book_append_sheet(wb, sheet(sortId(db.companies).map(c => ({ 'Company ID': c.id, 'Company Type': c.type, 'Company Name': c.name,
     'Investor Type': c.investorType || '', 'Investment Type': c.investmentType || '', 'Notes': c.notes || '' })), [11, 13, 36, 18, 18, 60]), 'Company');
   XLSX.utils.book_append_sheet(wb, sheet(sortId(db.people).map(p => ({ 'Person ID': p.id, 'Person Name': p.name, 'Person Email': p.email || '',
-    'Company Name': coName(p.companyId), 'Title': p.title || '', 'Phone': p.phone || '', 'Notes': p.notes || '' })), [10, 26, 32, 34, 20, 16, 46]), 'Person');
+    'Company Name': coName(p.companyId), 'Title': p.title || '', 'Phone': p.phone || '', 'Personal Email': p.personalEmail || '', 'LinkedIn': p.linkedin || '',
+    'Notes': p.notes || '' })), [10, 26, 32, 34, 20, 16, 32, 40, 46]), 'Person');
   XLSX.utils.book_append_sheet(wb, sheet([...db.interactions].sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.id - b.id).map(i => ({
     'Interaction ID': i.id, 'Entry Type': i.type, 'Interaction Date': xd(i.date), 'Company Name': coName(i.companyId), 'Format': i.format || '',
     'Via (Prime CI)': coName(i.viaId), 'People Involved': i.people.map(pName).filter(Boolean).join('; '), 'Interaction Desc': i.desc,
