@@ -6,7 +6,7 @@ import { Signer } from '@aws-sdk/rds-signer';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { toCsv } from './csv.mjs';
 import { buildWorkbook } from './workbook.mjs';
-import { HttpError, cleanInt, cleanText, cleanDate, oneOf, cleanIds } from './validate.mjs';
+import { HttpError, cleanInt, cleanText, cleanDate, cleanUrl, oneOf, cleanIds } from './validate.mjs';
 
 const { DB_HOST, DB_USER, BACKUP_BUCKET, AWS_REGION } = process.env;
 const ca = () => readFileSync(new URL('../rds-ca.pem', import.meta.url), 'utf8');
@@ -46,7 +46,8 @@ function companyFields(b) {
 }
 function personFields(b) {
   return { name: cleanText(b.name, 200, 'name', true), email: cleanText(b.email, 254, 'email'), company_id: cleanInt(b.companyId, 'company', true),
-    title: cleanText(b.title, 100, 'title'), phone: cleanText(b.phone, 50, 'phone'), notes: cleanText(b.notes, 60000, 'notes') };
+    title: cleanText(b.title, 100, 'title'), phone: cleanText(b.phone, 50, 'phone'), personal_email: cleanText(b.personalEmail, 254, 'personal email'),
+    linkedin_url: cleanUrl(b.linkedin, 300, 'LinkedIn profile'), notes: cleanText(b.notes, 60000, 'notes') };
 }
 function interactionFields(b) {
   const f = { entry_type: oneOf(b.type, ['Interaction', 'Intel'], 'entry type'), interaction_date: cleanDate(b.date, 'date', true),
@@ -86,7 +87,8 @@ async function getData(c) {
   const wasEdited = new Set(edited.map(e => e.interaction_id));
   return {
     companies: companies.map(x => ({ id: x.company_id, type: x.company_type, name: x.name, investorType: x.investor_type || '', investmentType: x.investment_type || '', notes: x.notes || '', validFrom: x.valid_from })),
-    people: people.map(x => ({ id: x.person_id, name: x.name, email: x.email || '', companyId: x.company_id, title: x.title || '', phone: x.phone || '', notes: x.notes || '', validFrom: x.valid_from })),
+    people: people.map(x => ({ id: x.person_id, name: x.name, email: x.email || '', companyId: x.company_id, title: x.title || '', phone: x.phone || '',
+      personalEmail: x.personal_email || '', linkedin: x.linkedin_url || '', notes: x.notes || '', validFrom: x.valid_from })),
     interactions: interactions.map(x => ({ id: x.interaction_id, type: x.entry_type, date: x.interaction_date, companyId: x.company_id, viaId: x.via_company_id, format: x.format || '',
       people: byIx.get(x.interaction_id) || [], recordedBy: x.recorded_by_person_id, desc: x.description, next: x.next_steps || '', review: x.review || '', validFrom: x.valid_from,
       ...(wasEdited.has(x.interaction_id) ? { updated: x.valid_from.replace(' ', 'T') + 'Z' } : {}) })),

@@ -60,7 +60,8 @@ for r in rows('Person'):
     i = int(r['person id']); co = co_ids.get(key(r.get('company name')))
     if not co: warn.append(f'Person {i}: company not found')
     p_ids.setdefault(key(r['person name']), []).append(i); p_all.add(i)
-    people.append((i, text(r['person name']), text(r.get('person email')), co, text(r.get('title')) or text(r.get('job title')), text(r.get('phone')), text(r.get('notes'))))
+    people.append((i, text(r['person name']), text(r.get('person email')), co, text(r.get('title')) or text(r.get('job title')), text(r.get('phone')),
+                   text(r.get('personal email')), text(r.get('linkedin')), text(r.get('notes'))))
 ix_ids = set()
 for r in rows('Interaction'):
     if not text(r.get('interaction desc')) and not text(r.get('company name')): continue
@@ -120,7 +121,7 @@ for t in tables + [t + '_history' for t in tables]:
 try:
     k.execute("SET @crm_user = 'workbook migration'")
     k.executemany('INSERT INTO company (company_id,company_type,name,investor_type,investment_type,notes) VALUES (%s,%s,%s,%s,%s,%s)', companies)
-    k.executemany('INSERT INTO person (person_id,name,email,company_id,title,phone,notes) VALUES (%s,%s,%s,%s,%s,%s,%s)', people)
+    k.executemany('INSERT INTO person (person_id,name,email,company_id,title,phone,personal_email,linkedin_url,notes) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)', people)
     k.executemany('INSERT INTO interaction (interaction_id,entry_type,interaction_date,company_id,via_company_id,format,description,next_steps,recorded_by_person_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', interactions)
     k.executemany('INSERT INTO interaction_person (interaction_id,person_id) VALUES (%s,%s)', links)
     k.executemany('INSERT INTO action (action_id,description,due_date,status,owner_person_id,interaction_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s)', actions)

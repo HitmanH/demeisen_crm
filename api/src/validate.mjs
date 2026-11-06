@@ -9,6 +9,17 @@ export function cleanText(v, max, label, required = false) {
   if (s.length > max) bad(`The ${label} is too long.`);
   return s;
 }
+// Web links are stored with https:// so the page can only ever link to a web address.
+export function cleanUrl(v, max, label) {
+  let s = cleanText(v, max, label);
+  if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  let u;
+  try { u = new URL(s); } catch { bad(`The ${label} is not a valid web address.`); }
+  if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.') || /\s/.test(s)) bad(`The ${label} is not a valid web address.`);
+  if (s.length > max) bad(`The ${label} is too long.`);
+  return s;
+}
 export function cleanInt(v, label, required = false) {
   if (v === undefined || v === null || v === '' || v === 0) return required ? bad(`Choose the ${label}.`) : null;
   const n = Number(v);
