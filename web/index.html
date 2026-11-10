@@ -236,6 +236,12 @@ mark { background: var(--mark); color: inherit; padding: 0 1px; border-radius: 2
 .chip-btns button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
 .chip-btns button:hover { border-color: var(--accent); color: var(--accent); }
 .chip-btns .mono { color: var(--muted); margin-left: 4px; }
+.stage-list { list-style: none; margin: 0; padding: 6px 14px 10px; }
+.stage-list li { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.stage-list li:last-child { border-bottom: 0; }
+.stage-list .muted { color: var(--muted); }
+.op-stage { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+.op-stage select { width: auto; font-size: 13px; padding: 3px 6px; }
 .next-list { list-style: none; margin: 0; padding: 0; }
 .next-list li { padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
 .next-list li:last-child { border-bottom: 0; }
@@ -334,10 +340,10 @@ function seed() {
   // Fictional example data shown until a workbook is imported. Never put real names here.
   return {
     companies: [
-      { id: 1, type: 'Investor', name: 'Northgate Capital', investorType: 'Hedge Fund', investmentType: 'SMA', notes: '' },
-      { id: 2, type: 'Investor', name: 'Harbour Endowment', investorType: 'Endowment', investmentType: 'Co-Mingled', notes: '' },
-      { id: 3, type: 'Prime CI', name: 'Example Prime Bank', investorType: 'Cap Intro', investmentType: '', notes: '' },
-      { id: 4, type: 'Demeisen', name: 'Demeisen', investorType: 'Hedge Fund', investmentType: '', notes: '' }
+      { id: 1, type: 'Investor', name: 'Northgate Capital', investorType: 'Hedge Fund', investmentType: 'SMA', stage: 'Active Progress', notes: '' },
+      { id: 2, type: 'Investor', name: 'Harbour Endowment', investorType: 'Endowment', investmentType: 'Co-Mingled', stage: 'Target Investor', notes: '' },
+      { id: 3, type: 'Prime CI', name: 'Example Prime Bank', investorType: 'Cap Intro', investmentType: '', stage: 'N/A - Other', notes: '' },
+      { id: 4, type: 'Demeisen', name: 'Demeisen', investorType: 'Hedge Fund', investmentType: '', stage: 'N/A - Other', notes: '' }
     ],
     people: [
       { id: 1, name: 'Sam Rivers', email: 'sam.rivers@example.com', companyId: 1, title: '', phone: '' },
@@ -374,6 +380,10 @@ function seed() {
     pairings: []
   };
 }
+// The live list comes from the engagement_stage table; this copy is for browser-only data.
+const DEFAULT_STAGES = ['Current Investor (CF)', 'Current Investor (SMA)', 'Onboarding (DD)', 'Active Progress', 'Target Investor', 'In Process',
+  'Keen, Catalyst Needed', 'Distribution List', 'Met, Connected', 'Not Interested Currently', 'Not connected', 'N/A - Other'];
+const NO_STAGE = 'N/A - Other';
 function load() { try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 // Every edit counts as an unsaved change until the workbook is saved; import, export and reset pass false.
 function save(changed = true) {
@@ -385,6 +395,7 @@ function save(changed = true) {
 }
 let db = LIVE ? { companies: [], people: [], interactions: [], actions: [], pairings: [] } : (load() || seed());
 db.pairings = db.pairings || []; // browser data saved before pairings existed
+db.companies.forEach(c => { if (!c.stage) c.stage = NO_STAGE; }); // browser data saved before engagement stages existed
 
 /* ---------- Hosted site: sign-in (authorization code with PKCE) and API calls ---------- */
 const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -446,6 +457,9 @@ const nextId = arr => arr.reduce((m, x) => Math.max(m, x.id), 0) + 1;
 const demeisenPeople = () => db.people.filter(p => company(p.companyId)?.type === 'Demeisen');
 const tcls = t => ({ 'Investor': 'inv', 'Prime CI': 'ci', 'Demeisen': 'dem', 'Other': 'oth' }[t] || 'ixn');
 const COMPANY_TYPES = ['Investor', 'Prime CI', 'Other', 'Demeisen'];
+const stages = () => (db.stages && db.stages.length ? db.stages : DEFAULT_STAGES);
+const stageOpts = (sel, placeholder) => (placeholder ? `<option value="" disabled ${sel ? '' : 'selected'}>${placeholder}</option>` : '')
+  + stages().map(t => `<option ${t === sel ? 'selected' : ''}>${esc(t)}</option>`).join('');
 const coPill = co => co ? `<button type="button" class="pill ${tcls(co.type)}" data-filter-co="${co.id}" title="Open ${esc(co.name)} one-pager">${esc(co.name)}</button>` : '';
 const typePill = t => `<span class="pill ${t === 'Intel' ? 'intel' : 'ixn'}">${t}</span>`;
 const ownerOpts = sel => demeisenPeople().map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
@@ -744,6 +758,8 @@ function renderHome() {
   const active = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const split = list => `${list.filter(i => i.type === 'Interaction').length} interactions · ${list.filter(i => i.type === 'Intel').length} intel`;
   const today = TODAY.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const investors = db.companies.filter(c => c.type === 'Investor');
+  const pipeline = stages().map(st => [st, investors.filter(c => c.stage === st).length]);
 
   view.innerHTML = `
     <div class="pagehead"><div><h1>Overview</h1><p class="sub">${today}</p></div>
@@ -774,6 +790,10 @@ function renderHome() {
             ${active.length ? `<div class="chip-btns">${active.map(([id, n]) => `<button type="button" data-filter-co="${id}">${esc(company(+id).name)}<span class="mono">${n}</span></button>`).join('')}</div>`
               : '<div class="empty">No investor activity in the last 30 days.</div>'}
           </section>
+          <section class="panel">
+            <div class="sec-head"><h2>Investors by engagement stage</h2><a href="#companies" class="linkbtn" data-co-stage="">All companies</a></div>
+            <ul class="stage-list">${pipeline.map(([st, n]) => `<li><button type="button" class="linkbtn" data-co-stage="${esc(st)}" title="Show companies at ${esc(st)}">${esc(st)}</button><span class="mono ${n ? '' : 'muted'}">${n}</span></li>`).join('')}</ul>
+          </section>
         </div>
       </div>
     </div>`;
@@ -803,6 +823,20 @@ function renderAllocator() {
         <select id="al-co">${companyOpts(allocId)}</select></div></div>
     <div id="al-body">${c ? allocatorBody(c) : '<div class="panel empty">Add a company to see its one-pager.</div>'}</div>`;
   view.querySelector('#al-co').addEventListener('change', e => { allocId = +e.target.value; renderAllocator(); });
+  view.querySelector('#op-stage')?.addEventListener('change', e => setStage(c, e.target.value, e.target));
+}
+// Saves a new engagement stage for one company from the one-pager.
+function setStage(c, stage, sel) {
+  const rec = { type: c.type, name: c.name, investorType: c.investorType, investmentType: c.investmentType, stage, notes: c.notes };
+  if (LIVE) {
+    sel.disabled = true;
+    liveWrite(async () => {
+      await api('PUT', `/api/companies/${c.id}`, { ...rec, expectedValidFrom: c.validFrom });
+      await reloadData(); toast(`${c.name}: ${stage}`);
+    }).finally(() => route());
+    return;
+  }
+  Object.assign(company(c.id), rec); save(); toast(`${c.name}: ${stage}`); route();
 }
 function allocatorBody(c) {
   const isCI = c.type === 'Prime CI';
@@ -842,7 +876,8 @@ function allocatorBody(c) {
         <h2 class="op-name" style="text-transform:none;letter-spacing:-0.01em;color:var(--ink)">${esc(c.name)}</h2>
         <div class="op-tags"><span class="pill ${tcls(c.type)}">${esc(c.type)}</span>
           ${c.investorType ? `<span class="pill ixn">${esc(c.investorType)}</span>` : ''}
-          ${c.investmentType ? `<span class="pill ixn">${esc(c.investmentType)}</span>` : ''}</div>
+          ${c.investmentType ? `<span class="pill ixn">${esc(c.investmentType)}</span>` : ''}
+          <label class="op-stage"><span class="lbl">Engagement stage</span><select id="op-stage">${stageOpts(c.stage)}</select></label></div>
         <div class="op-facts">
           ${intro ? `<span>First contact: <strong>${fmt(intro.date)}</strong>${introVia ? ` via <strong>${esc(introVia.name)}</strong>${introBy.length ? ` (${esc(introBy.join(', '))})` : ''}` : ''}</span>` : ''}
           ${Object.keys(coverage).length ? `<span>Covered by: <strong>${Object.entries(coverage).sort((a, b) => b[1] - a[1]).map(([n, k]) => `${esc(n)} (${k})`).join(', ')}</strong></span>` : ''}
@@ -1051,7 +1086,7 @@ function renderResults() {
 }
 
 /* ---------- Companies ---------- */
-let coEdit = null;
+let coEdit = null, coStage = '';
 function renderCompanies() {
   const stats = c => {
     const its = db.interactions.filter(i => i.companyId === c.id);
@@ -1060,12 +1095,14 @@ function renderCompanies() {
     return { people: db.people.filter(p => p.companyId === c.id).length, last, open };
   };
   const order = { 'Investor': 0, 'Prime CI': 1, 'Other': 2, 'Demeisen': 3 };
-  const rows = [...db.companies].sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || a.name.localeCompare(b.name));
-  const editing = coEdit === 'new' ? { id: null, type: 'Investor', name: '', investorType: '', investmentType: '', notes: '' } : coEdit ? company(coEdit) : null;
+  const rows = db.companies.filter(c => !coStage || c.stage === coStage).sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || a.name.localeCompare(b.name));
+  const editing = coEdit === 'new' ? { id: null, type: 'Investor', name: '', investorType: '', investmentType: '', stage: '', notes: '' } : coEdit ? company(coEdit) : null;
   const distinct = k => [...new Set(db.companies.map(c => c[k]).filter(Boolean))].sort();
   view.innerHTML = `
     <div class="pagehead"><div><h1>Companies</h1><p class="sub">Investors, prime broker cap intro desks, and Demeisen itself.</p></div>
-      <button type="button" class="btn" id="co-new">Add company</button></div>
+      <div class="toolbar"><label class="lbl" for="co-stage-filter">Engagement stage</label>
+        <select id="co-stage-filter"><option value="">All stages</option>${stageOpts(coStage)}</select>
+        <button type="button" class="btn" id="co-new">Add company</button></div></div>
     <div class="stack">
       ${editing ? `<form class="panel edit-panel" id="co-form">
         <h2>${editing.id ? 'Edit ' + esc(editing.name) : 'New company'}</h2>
@@ -1077,18 +1114,21 @@ function renderCompanies() {
             <datalist id="co-invtype-list">${distinct('investorType').map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
           <div class="field"><label class="lbl" for="co-inv">Investment type</label><input type="text" id="co-inv" list="co-inv-list" value="${esc(editing.investmentType)}" placeholder="e.g. SMA, Co-Mingled">
             <datalist id="co-inv-list">${distinct('investmentType').map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
+          <div class="field"><label class="lbl" for="co-stage">Engagement stage</label><select id="co-stage" required>${stageOpts(editing.stage, 'Choose a stage')}</select></div>
           <div class="field span-all"><label class="lbl" for="co-notes">Notes <em>(optional)</em></label><textarea id="co-notes" rows="2">${esc(editing.notes)}</textarea></div>
         </div>
         <div class="form-actions"><button class="btn" type="submit">Save company</button><button type="button" class="btn ghost" id="co-cancel">Cancel</button><span class="form-error" id="co-err" role="alert"></span></div>
       </form>` : ''}
       <div class="panel tbl-wrap"><table>
-        <thead><tr><th>Company</th><th>Type</th><th>Investor type</th><th>Investment type</th><th class="num">People</th><th>Last contact</th><th class="num">Open actions</th><th></th></tr></thead>
+        <thead><tr><th>Company</th><th>Type</th><th>Investor type</th><th>Investment type</th><th>Engagement stage</th><th class="num">People</th><th>Last contact</th><th class="num">Open actions</th><th></th></tr></thead>
         <tbody>${rows.map(c => { const s = stats(c); return `<tr>
-          <td>${c.type !== 'Demeisen' ? `<button type="button" class="linkbtn" data-filter-co="${c.id}" title="Open ${esc(c.name)} one-pager"><strong>${esc(c.name)}</strong></button>` : `<strong>${esc(c.name)}</strong>`}</td><td><span class="pill ${tcls(c.type)}">${esc(c.type)}</span></td><td>${esc(c.investorType)}</td><td>${esc(c.investmentType)}</td>
+          <td>${c.type !== 'Demeisen' ? `<button type="button" class="linkbtn" data-filter-co="${c.id}" title="Open ${esc(c.name)} one-pager"><strong>${esc(c.name)}</strong></button>` : `<strong>${esc(c.name)}</strong>`}</td><td><span class="pill ${tcls(c.type)}">${esc(c.type)}</span></td><td>${esc(c.investorType)}</td><td>${esc(c.investmentType)}</td><td>${esc(c.stage)}</td>
           <td class="num"><button type="button" class="linkbtn" data-pe-co="${c.id}" title="Show ${esc(c.name)} people">${s.people}</button></td><td class="mono">${s.last ? fmt(s.last) : '<span class="muted">None</span>'}</td><td class="num">${s.open}</td>
           <td style="white-space:nowrap;text-align:right">${c.type !== 'Demeisen' ? `<button type="button" class="btn ghost sm" data-filter-co="${c.id}">One-pager</button>` : ''}<button type="button" class="btn ghost sm" data-co-edit="${c.id}">Edit</button></td></tr>`; }).join('')}
+        ${rows.length ? '' : '<tr><td colspan="9" class="muted">No companies at this stage.</td></tr>'}
         </tbody></table></div>
     </div>`;
+  view.querySelector('#co-stage-filter').addEventListener('change', e => { coStage = e.target.value; renderCompanies(); });
   view.querySelector('#co-new').addEventListener('click', () => { coEdit = 'new'; renderCompanies(); view.querySelector('#co-name').focus(); });
   view.querySelectorAll('[data-co-edit]').forEach(b => b.addEventListener('click', () => { coEdit = +b.dataset.coEdit; renderCompanies(); window.scrollTo(0, 0); }));
   if (editing) {
@@ -1099,8 +1139,10 @@ function renderCompanies() {
       const err = view.querySelector('#co-err');
       if (!name) { err.textContent = 'Add the company name.'; return; }
       if (db.companies.some(c => c.name.toLowerCase() === name.toLowerCase() && c.id !== editing.id)) { err.textContent = `${name} already exists.`; return; }
+      const stage = view.querySelector('#co-stage').value;
+      if (!stage) { err.textContent = 'Choose the engagement stage.'; return; }
       const rec = { type: view.querySelector('#co-type').value, name, investorType: view.querySelector('#co-invtype').value.trim(),
-        investmentType: view.querySelector('#co-inv').value.trim(), notes: view.querySelector('#co-notes').value.trim() };
+        investmentType: view.querySelector('#co-inv').value.trim(), stage, notes: view.querySelector('#co-notes').value.trim() };
       if (LIVE) {
         liveWrite(async () => {
           await api(editing.id ? 'PUT' : 'POST', editing.id ? `/api/companies/${editing.id}` : '/api/companies', { ...rec, expectedValidFrom: editing.validFrom });
@@ -1356,6 +1398,8 @@ view.addEventListener('click', e => {
   if (ixc) { e.preventDefault(); ixState = { type: 'all', company: ixc.dataset.ixCo, open: new Set(), focus: null }; goto('interactions'); return; }
   const lg = e.target.closest('[data-log-co]');
   if (lg) { e.preventDefault(); logPrefill = +lg.dataset.logCo; goto('log'); return; }
+  const cs = e.target.closest('[data-co-stage]');
+  if (cs) { e.preventDefault(); coStage = cs.dataset.coStage; coEdit = null; goto('companies'); return; }
   const pc = e.target.closest('[data-pe-co]');
   if (pc) { e.preventDefault(); peFilter = pc.dataset.peCo; peEdit = null; goto('people'); return; }
   const pn = e.target.closest('[data-pe-new]');
@@ -1425,7 +1469,7 @@ function importWorkbook(buf, filename) {
     const t = str(col(r, 'Company Type'));
     if (t && !COMPANY_TYPES.some(x => lc(x) === lc(t))) warn.push(`Company "${name}": type "${t}" not recognised, shown as Other.`);
     companies.push({ id: +col(r, 'Company ID') || 100000 + i, type: typeOf(t), name,
-      investorType: str(col(r, 'Investor Type')), investmentType: str(col(r, 'Investment Type')), notes: str(col(r, 'Notes')) });
+      investorType: str(col(r, 'Investor Type')), investmentType: str(col(r, 'Investment Type')), stage: str(col(r, 'Engagement Stage')) || NO_STAGE, notes: str(col(r, 'Notes')) });
   });
   const coByName = new Map(companies.map(c => [lc(c.name), c]));
   if (!companies.some(c => c.type === 'Demeisen')) warn.push('No company has type Demeisen, so owners and "Recorded by" lists will be empty.');
@@ -1550,7 +1594,7 @@ function buildWorkbook() {
   const sortId = arr => [...arr].sort((a, b) => a.id - b.id);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, sheet(sortId(db.companies).map(c => ({ 'Company ID': c.id, 'Company Type': c.type, 'Company Name': c.name,
-    'Investor Type': c.investorType || '', 'Investment Type': c.investmentType || '', 'Notes': c.notes || '' })), [11, 13, 36, 18, 18, 60]), 'Company');
+    'Investor Type': c.investorType || '', 'Investment Type': c.investmentType || '', 'Engagement Stage': c.stage || '', 'Notes': c.notes || '' })), [11, 13, 36, 18, 18, 26, 60]), 'Company');
   XLSX.utils.book_append_sheet(wb, sheet(sortId(db.people).map(p => ({ 'Person ID': p.id, 'Person Name': p.name, 'Person Email': p.email || '',
     'Company Name': coName(p.companyId), 'Title': p.title || '', 'Phone': p.phone || '', 'Personal Email': p.personalEmail || '', 'LinkedIn': p.linkedin || '',
     'Notes': p.notes || '' })), [10, 26, 32, 34, 20, 16, 32, 40, 46]), 'Person');

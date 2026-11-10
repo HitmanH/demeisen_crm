@@ -42,6 +42,7 @@ async function updateRow(c, table, idCol, id, fields, expected) {
 function companyFields(b) {
   return { company_type: oneOf(b.type, COMPANY_TYPES, 'company type'), name: cleanText(b.name, 200, 'name', true),
     investor_type: cleanText(b.investorType, 50, 'investor type'), investment_type: cleanText(b.investmentType, 50, 'investment type'),
+    engagement_stage: cleanText(b.stage, 50, 'engagement stage', true),
     notes: cleanText(b.notes, 60000, 'notes') };
 }
 function personFields(b) {
@@ -76,17 +77,18 @@ const insert = async (c, table, f) => {
 
 /* ---------- Reads ---------- */
 async function getData(c) {
-  const [[companies], [people], [interactions], [links], [actions], [edited], [pairings]] = await Promise.all([
+  const [[companies], [people], [interactions], [links], [actions], [edited], [pairings], [stages]] = await Promise.all([
     c.query('SELECT * FROM company'), c.query('SELECT * FROM person'), c.query('SELECT * FROM interaction'),
     c.query('SELECT interaction_id, person_id FROM interaction_person'), c.query('SELECT * FROM action'),
     c.query("SELECT DISTINCT interaction_id FROM interaction_history WHERE operation = 'UPDATE'"),
-    c.query('SELECT * FROM counterparty_pairing')
+    c.query('SELECT * FROM counterparty_pairing'), c.query('SELECT stage_name FROM engagement_stage ORDER BY sort_order')
   ]);
   const byIx = new Map();
   links.forEach(l => { if (!byIx.has(l.interaction_id)) byIx.set(l.interaction_id, []); byIx.get(l.interaction_id).push(l.person_id); });
   const wasEdited = new Set(edited.map(e => e.interaction_id));
   return {
-    companies: companies.map(x => ({ id: x.company_id, type: x.company_type, name: x.name, investorType: x.investor_type || '', investmentType: x.investment_type || '', notes: x.notes || '', validFrom: x.valid_from })),
+    stages: stages.map(x => x.stage_name),
+    companies: companies.map(x => ({ id: x.company_id, type: x.company_type, name: x.name, investorType: x.investor_type || '', investmentType: x.investment_type || '', stage: x.engagement_stage, notes: x.notes || '', validFrom: x.valid_from })),
     people: people.map(x => ({ id: x.person_id, name: x.name, email: x.email || '', companyId: x.company_id, title: x.title || '', phone: x.phone || '',
       personalEmail: x.personal_email || '', linkedin: x.linkedin_url || '', notes: x.notes || '', validFrom: x.valid_from })),
     interactions: interactions.map(x => ({ id: x.interaction_id, type: x.entry_type, date: x.interaction_date, companyId: x.company_id, viaId: x.via_company_id, format: x.format || '',
@@ -179,6 +181,7 @@ async function handleApi(event) {
     if (c) await c.rollback().catch(() => {});
     if (e instanceof HttpError) return reply(e.status, { error: e.message });
     if (e.errno === 1062) return reply(409, { error: 'That name already exists.' });
+    if (e.errno === 1452 && /engagement_stage/.test(e.message)) return reply(400, { error: 'That engagement stage is not in the list. Reload to see the latest stages.' });
     if ([1451, 1452, 3819].includes(e.errno)) return reply(400, { error: 'That change breaks a data rule, such as a missing or invalid link.' });
     console.error('request failed', method, path, e.code, e.errno); // no request content in logs
     return reply(500, { error: 'Something went wrong. Nothing was saved.' });
@@ -188,7 +191,7 @@ async function handleApi(event) {
 }
 
 /* ---------- Nightly backup: every table as CSV, a workbook that can seed an empty database, and a manifest with counts ---------- */
-export const BACKUP_TABLES = ['company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing',
+export const BACKUP_TABLES = ['engagement_stage', 'company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing',
   'company_history', 'person_history', 'interaction_history', 'interaction_person_history', 'action_history', 'counterparty_pairing_history'];
 
 async function runBackup() {

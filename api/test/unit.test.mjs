@@ -11,7 +11,7 @@ test('csv quotes commas, quotes and line breaks and keeps blanks', () => {
   assert.equal(out, '﻿a,b\r\n"x,y","say ""hi"""\r\n"line\nbreak",\r\n');
 });
 const SAMPLE = {
-  companies: [{ id: 2, type: 'Investor', name: 'Northgate Capital', investorType: 'Hedge Fund' }, { id: 1, type: 'Demeisen', name: 'Example Fund' }],
+  companies: [{ id: 2, type: 'Investor', name: 'Northgate Capital', investorType: 'Hedge Fund', stage: 'Target Investor' }, { id: 1, type: 'Demeisen', name: 'Example Fund', stage: 'N/A - Other' }],
   people: [{ id: 1, name: 'Sam Rivers', companyId: 2 }, { id: 2, name: 'Sam Rivers', companyId: 1 }],
   interactions: [{ id: 5, type: 'Interaction', date: '2026-03-01', companyId: 2, viaId: null, people: [2, 1], recordedBy: 2, desc: 'Intro' }],
   actions: [{ id: 3, desc: 'Follow up', due: '2026-03-08', status: 'Open', ownerId: 2, interactionId: 5 }],
@@ -33,6 +33,10 @@ test('workbook keeps person IDs, so people with the same name stay distinct', ()
   assert.equal(ix['Interaction Date'], 46082); // 1 March 2026 as an Excel date
   assert.equal(ac['Owner ID'], 2);
   assert.equal(ac['Company'], 'Northgate Capital');
+});
+test('workbook includes each company engagement stage', () => {
+  const rows = XLSX.utils.sheet_to_json(readBack(SAMPLE).Sheets.Company);
+  assert.deepEqual(rows.map(r => r['Engagement Stage']), ['N/A - Other', 'Target Investor']);
 });
 test('workbook names both companies in a pairing', () => {
   const [p] = XLSX.utils.sheet_to_json(readBack(SAMPLE).Sheets['Counterparty Pairing']);
