@@ -26,7 +26,25 @@ Resources:
       UserPoolName: demeisen-crm-poc
       UsernameAttributes: [email]
       AutoVerifiedAttributes: [email]
-      AdminCreateUserConfig: { AllowAdminCreateUserOnly: true }
+      # Every email the sign-in service sends is marked INTERNAL BETA. The site address is written out
+      # because referencing the distribution here would make a circular dependency.
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+        InviteMessageTemplate:
+          EmailSubject: 'INTERNAL BETA - Demeisen CRM invitation'
+          EmailMessage: >-
+            <p><strong>INTERNAL BETA - Demeisen LLP internal use only</strong></p>
+            <p>You have been invited to the Demeisen CRM. The application (its screens and features) is an internal beta
+            and will change. The data in it is not a test: it is Demeisen's live investor records, so changes you make are
+            saved for real. It is confidential, so please do not share it, this email or the link.</p>
+            <p>Site: https://d1ld7k58u2qhpo.cloudfront.net/<br>Username: {username}<br>Temporary password: {####}</p>
+            <p>When you first sign in you will choose a new password (at least 14 characters, with upper and lower case,
+            a number and a symbol) and set up an authenticator app for a 6-digit sign-in code.
+            The temporary password expires in 7 days.</p>
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailSubject: 'INTERNAL BETA - Demeisen CRM verification code'
+        EmailMessage: '<p><strong>INTERNAL BETA - Demeisen LLP internal use only</strong></p><p>Your Demeisen CRM verification code is {####}</p>'
       MfaConfiguration: 'ON'
       EnabledMfas: [SOFTWARE_TOKEN_MFA]
       Policies:
