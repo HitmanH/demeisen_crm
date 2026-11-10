@@ -9,7 +9,7 @@ const xd = s => s ? Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)
 const xdt = s => { if (!s) return ''; const d = new Date(s); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()) / 864e5 + 25569; };
 
 export const WORKBOOK_COLUMNS = {
-  Company: ['Company ID', 'Company Type', 'Company Name', 'Investor Type', 'Investment Type', 'Notes'],
+  Company: ['Company ID', 'Company Type', 'Company Name', 'Investor Type', 'Investment Type', 'Engagement Stage', 'Notes'],
   Person: ['Person ID', 'Person Name', 'Person Email', 'Company Name', 'Title', 'Phone', 'Personal Email', 'LinkedIn', 'Notes'],
   Interaction: ['Interaction ID', 'Entry Type', 'Interaction Date', 'Company Name', 'Format', 'Via (Prime CI)', 'People Involved', 'Interaction Desc',
     'Interaction Next Steps', 'Recorded By', 'Review', 'Last Updated', 'People Involved IDs', 'Recorded By ID'],
@@ -17,7 +17,7 @@ export const WORKBOOK_COLUMNS = {
   'Counterparty Pairing': ['Pairing ID', 'Allocator', 'Prime CI', 'Connection', 'Detail', 'Date']
 };
 const WIDTHS = {
-  Company: [11, 13, 36, 18, 18, 60], Person: [10, 26, 32, 34, 20, 16, 32, 40, 46],
+  Company: [11, 13, 36, 18, 18, 26, 60], Person: [10, 26, 32, 34, 20, 16, 32, 40, 46],
   Interaction: [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18, 16, 12], Action: [10, 62, 15, 10, 15, 13, 30, 40, 10],
   'Counterparty Pairing': [10, 36, 36, 30, 36, 10]
 };
@@ -44,7 +44,7 @@ export function buildWorkbook(data) {
   const sortId = arr => [...arr].sort((a, b) => a.id - b.id);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, sheet('Company', sortId(data.companies).map(c => ({ 'Company ID': c.id, 'Company Type': c.type, 'Company Name': c.name,
-    'Investor Type': c.investorType || '', 'Investment Type': c.investmentType || '', 'Notes': c.notes || '' }))), 'Company');
+    'Investor Type': c.investorType || '', 'Investment Type': c.investmentType || '', 'Engagement Stage': c.stage || '', 'Notes': c.notes || '' }))), 'Company');
   XLSX.utils.book_append_sheet(wb, sheet('Person', sortId(data.people).map(p => ({ 'Person ID': p.id, 'Person Name': p.name, 'Person Email': p.email || '',
     'Company Name': coName(p.companyId), 'Title': p.title || '', 'Phone': p.phone || '',
     'Personal Email': p.personalEmail || '', 'LinkedIn': p.linkedin || '', 'Notes': p.notes || '' }))), 'Person');

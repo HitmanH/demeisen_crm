@@ -1,6 +1,7 @@
 """Seeds an empty database from a CRM workbook, keeping the workbook IDs. Accepts the original
 workbook, an Export to Excel file or a nightly backup workbook. History starts afresh; earlier
-versions are only in the nightly CSVs.
+versions are only in the nightly CSVs. A company with no engagement stage gets 'N/A - Other'; a
+stage that is not in the engagement_stage table stops the load.
 
 Refuses to run unless the database is empty and every name matches. Everything loads in one
 transaction. Output is counts and row IDs only, so no investor details reach logs or terminals.
@@ -43,7 +44,8 @@ for r in rows('Company'):
     if t not in ('Investor', 'Prime CI', 'Other', 'Demeisen'): warn.append(f'Company {i}: type not recognised')
     if key(r['company name']) in co_ids: warn.append(f'Company {i}: duplicate name')
     co_ids[key(r['company name'])] = i
-    companies.append((i, t, text(r['company name']), text(r.get('investor type')), text(r.get('investment type')), text(r.get('notes'))))
+    companies.append((i, t, text(r['company name']), text(r.get('investor type')), text(r.get('investment type')),
+                      text(r.get('engagement stage')) or 'N/A - Other', text(r.get('notes'))))
 p_ids, p_all = {}, set()
 def person_id(id_value, name, where):
     """The ID column when the file has one, otherwise the name, which must be unambiguous."""
@@ -120,7 +122,7 @@ for t in tables + [t + '_history' for t in tables]:
     if k.fetchone()[0]: sys.exit(f'Stopped: {t} is not empty. Nothing was loaded.')
 try:
     k.execute("SET @crm_user = 'workbook migration'")
-    k.executemany('INSERT INTO company (company_id,company_type,name,investor_type,investment_type,notes) VALUES (%s,%s,%s,%s,%s,%s)', companies)
+    k.executemany('INSERT INTO company (company_id,company_type,name,investor_type,investment_type,engagement_stage,notes) VALUES (%s,%s,%s,%s,%s,%s,%s)', companies)
     k.executemany('INSERT INTO person (person_id,name,email,company_id,title,phone,personal_email,linkedin_url,notes) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)', people)
     k.executemany('INSERT INTO interaction (interaction_id,entry_type,interaction_date,company_id,via_company_id,format,description,next_steps,recorded_by_person_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', interactions)
     k.executemany('INSERT INTO interaction_person (interaction_id,person_id) VALUES (%s,%s)', links)
