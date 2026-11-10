@@ -41,7 +41,7 @@ co_ids = {}
 for r in rows('Company'):
     if not text(r.get('company name')): continue
     i = int(r['company id']); t = text(r.get('company type'))
-    if t not in ('Investor', 'Prime CI', 'Other', 'Demeisen'): warn.append(f'Company {i}: type not recognised')
+    if t not in ('Investor', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'): warn.append(f'Company {i}: type not recognised')
     if key(r['company name']) in co_ids: warn.append(f'Company {i}: duplicate name')
     co_ids[key(r['company name'])] = i
     companies.append((i, t, text(r['company name']), text(r.get('investor type')), text(r.get('investment type')),
@@ -99,7 +99,7 @@ seen = set()
 for r in (rows('Counterparty Pairing') if 'Counterparty Pairing' in wb.sheetnames else ()):
     i = int(r['pairing id']); al = co_ids.get(key(r.get('allocator'))); cp = co_ids.get(key(r.get('prime ci'))); conn = text(r.get('connection'))
     if not al: warn.append(f'Pairing {i}: allocator not found')
-    if not cp: warn.append(f'Pairing {i}: Prime CI not found')
+    if not cp: warn.append(f'Pairing {i}: counterparty not found')
     if not conn: warn.append(f'Pairing {i}: no connection')
     if (al, cp, key(conn)) in seen: warn.append(f'Pairing {i}: duplicate')
     seen.add((al, cp, key(conn)))

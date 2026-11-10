@@ -458,8 +458,11 @@ const company = id => byId(db.companies, id);
 const person = id => byId(db.people, id);
 const nextId = arr => arr.reduce((m, x) => Math.max(m, x.id), 0) + 1;
 const demeisenPeople = () => db.people.filter(p => company(p.companyId)?.type === 'Demeisen');
-const tcls = t => ({ 'Investor': 'inv', 'Prime CI': 'ci', 'Demeisen': 'dem', 'Other': 'oth' }[t] || 'ixn');
-const COMPANY_TYPES = ['Investor', 'Prime CI', 'Other', 'Demeisen'];
+const tcls = t => ({ 'Investor': 'inv', 'Prime CI': 'ci', 'Third Party Marketer': 'ci', 'Prior Colleague': 'ci', 'Friendly LP': 'ci', 'Demeisen': 'dem', 'Other': 'oth' }[t] || 'ixn');
+const COMPANY_TYPES = ['Investor', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'];
+// Firms and people who introduce allocators to Demeisen: the counterparties on CI Lead, Connections and the cap intro one-pager.
+const INTRODUCER_TYPES = ['Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP'];
+const isIntroducer = c => INTRODUCER_TYPES.includes(c?.type);
 const stages = () => (db.stages && db.stages.length ? db.stages : DEFAULT_STAGES);
 const stageOpts = (sel, placeholder) => (placeholder ? `<option value="" disabled ${sel ? '' : 'selected'}>${placeholder}</option>` : '')
   + stages().map(t => `<option ${t === sel ? 'selected' : ''}>${esc(t)}</option>`).join('');
@@ -649,7 +652,7 @@ function renderLog() {
         <div class="field"><label class="lbl" for="lg-kind">Format <em>(optional)</em></label>
           <select id="lg-kind">${fmts.map(o => `<option ${ed?.format === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></div>
         <div class="field"><label class="lbl" for="lg-via">External party <em>(optional)</em></label>
-          <select id="lg-via"><option value="">None</option>${db.companies.filter(c => c.type === 'Prime CI').map(c => `<option value="${c.id}" ${ed?.viaId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+          <select id="lg-via"><option value="">None</option>${typedCoOpts(INTRODUCER_TYPES, ed?.viaId)}</select></div>
       </div>
       <div class="field"><span class="lbl">People involved</span><div class="people-box" id="lg-people">${peopleChoices(ed?.companyId || null, ed ? ed.people : [me])}</div></div>
       <div class="field"><label class="lbl" for="lg-desc">Description</label>
@@ -819,9 +822,9 @@ const typedCoOpts = (types, sel) => types.map(t => {
   const cs = db.companies.filter(c => c.type === t).sort((a, b) => a.name.localeCompare(b.name));
   return cs.length ? `<optgroup label="${t}">${cs.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : '';
 }).join('');
-// Prime CI companies open the cap intro one-pager; everyone else the allocator one.
+// Introducers (Prime CI, third party marketers, prior colleagues, friendly LPs) open the cap intro one-pager; everyone else the allocator one.
 function openOnePager(id) {
-  if (company(id)?.type === 'Prime CI') { capId = id; goto('capintro'); } else { allocId = id; goto('allocator'); }
+  if (isIntroducer(company(id))) { capId = id; goto('capintro'); } else { allocId = id; goto('allocator'); }
 }
 function renderAllocator() {
   if (!allocId || !ALLOCATOR_TYPES.includes(company(allocId)?.type)) {
@@ -851,12 +854,12 @@ function setStage(c, stage, sel) {
   Object.assign(company(c.id), rec); save(); toast(`${c.name}: ${stage}`); route();
 }
 function allocatorBody(c) {
-  const isCI = c.type === 'Prime CI';
+  const isCI = isIntroducer(c);
   const its = db.interactions.filter(i => i.companyId === c.id || (isCI && i.viaId === c.id)).sort(byRecent);
   const first = its[its.length - 1], last = its[0];
   const intro = [...its].reverse().find(i => /intro/i.test(i.format || '')) || first;
   const introVia = intro?.viaId ? company(intro.viaId) : null;
-  const introBy = intro ? intro.people.map(person).filter(p => p && company(p.companyId)?.type === 'Prime CI').map(p => p.name) : [];
+  const introBy = intro ? intro.people.map(person).filter(p => p && isIntroducer(company(p.companyId))).map(p => p.name) : [];
   const meetings = its.filter(i => /meeting|call|coffee|drink/i.test(i.format || '')).length;
   const itIds = new Set(its.map(i => i.id));
   const acts = db.actions.filter(a => itIds.has(a.interactionId));
@@ -956,17 +959,17 @@ function activityPanel(its) {
 
 /* ---------- Cap intro one-pager ---------- */
 function renderCapIntro() {
-  const cis = db.companies.filter(c => c.type === 'Prime CI');
+  const cis = db.companies.filter(isIntroducer);
   if (!cis.some(c => c.id === capId)) {
-    const latest = [...db.interactions].sort(byRecent).find(i => company(i.viaId)?.type === 'Prime CI' || company(i.companyId)?.type === 'Prime CI');
-    capId = latest ? (company(latest.viaId)?.type === 'Prime CI' ? latest.viaId : latest.companyId) : [...cis].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || null;
+    const latest = [...db.interactions].sort(byRecent).find(i => isIntroducer(company(i.viaId)) || isIntroducer(company(i.companyId)));
+    capId = latest ? (isIntroducer(company(latest.viaId)) ? latest.viaId : latest.companyId) : [...cis].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || null;
   }
   const c = company(capId);
   view.innerHTML = `
-    <div class="pagehead"><div><h1>Cap Intro One Pager</h1><p class="sub">Everything on one cap intro team: the allocators they introduced or lead, their people, activity and what's outstanding.</p></div>
-      <div class="toolbar"><label class="lbl" for="cap-co">Prime CI</label>
-        <select id="cap-co">${typedCoOpts(['Prime CI'], capId)}</select></div></div>
-    <div>${c ? capIntroBody(c) : '<div class="panel empty">Add a Prime CI company to see its one-pager.</div>'}</div>`;
+    <div class="pagehead"><div><h1>Cap Intro One Pager</h1><p class="sub">Everything on one introducer (Prime CI, third party marketer, prior colleague or friendly LP): the allocators they introduced or lead, their people, activity and what's outstanding.</p></div>
+      <div class="toolbar"><label class="lbl" for="cap-co">Introducer</label>
+        <select id="cap-co">${typedCoOpts(INTRODUCER_TYPES, capId)}</select></div></div>
+    <div>${c ? capIntroBody(c) : '<div class="panel empty">Add a Prime CI, Third Party Marketer, Prior Colleague or Friendly LP company to see its one-pager.</div>'}</div>`;
   view.querySelector('#cap-co').addEventListener('change', e => { capId = +e.target.value; renderCapIntro(); });
 }
 function capIntroBody(c) {
@@ -1022,7 +1025,7 @@ function capIntroBody(c) {
         <thead><tr><th>Allocator</th><th>Engagement stage</th><th>Connection</th><th class="num">Via them</th><th>Latest with allocator</th></tr></thead>
         <tbody>${allocators.map(r => `<tr><td>${coPill(r.a)}${r.lead ? ' <span class="pill done">Lead</span>' : ''}</td><td>${esc(r.a.stage || '')}</td><td>${how(r)}</td>
           <td class="num">${r.n}</td><td>${r.last ? `<span class="mono">${fmt(r.last.date)}</span> <a href="#" class="clamp" data-open-int="${r.last.id}">${esc(r.last.desc)}</a>` : '<span class="muted">None</span>'}</td></tr>`).join('')}</tbody></table></div>`
-        : '<div class="empty">No allocators linked yet. Record one under CI Lead or Connections, or log an entry with this Prime CI as Via.</div>'}
+        : '<div class="empty">No allocators linked yet. Record one under CI Lead or Connections, or log an entry with them as the external party.</div>'}
     </section>
 
     ${activityPanel(its)}
@@ -1207,7 +1210,7 @@ function renderCompanies() {
     const open = db.actions.filter(a => a.status === 'Open' && its.some(i => i.id === a.interactionId)).length;
     return { people: db.people.filter(p => p.companyId === c.id).length, last, open };
   };
-  const order = { 'Investor': 0, 'Prime CI': 1, 'Other': 2, 'Demeisen': 3 };
+  const order = { 'Investor': 0, 'Prime CI': 1, 'Third Party Marketer': 2, 'Prior Colleague': 3, 'Friendly LP': 4, 'Other': 5, 'Demeisen': 6 };
   const rows = db.companies.filter(c => !coStage || c.stage === coStage).sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || a.name.localeCompare(b.name));
   const editing = coEdit === 'new' ? { id: null, type: 'Investor', name: '', investorType: '', investmentType: '', stage: '', notes: '' } : coEdit ? company(coEdit) : null;
   const distinct = k => [...new Set(db.companies.map(c => c[k]).filter(Boolean))].sort();
@@ -1349,7 +1352,7 @@ function renderPeople() {
 }
 
 /* ---------- CI Lead ---------- */
-// Who leads an allocator: its Relationship Lead; if none, its Initial Connection; if neither, whoever is on its earliest entry with a Prime CI.
+// Who leads an allocator: its Relationship Lead; if none, its Initial Connection; if neither, whoever is on its earliest entry with an introducer.
 function ciLeads(allocatorId) {
   const mine = db.pairings.filter(p => p.allocatorId === allocatorId);
   for (const connection of ['Relationship Lead', 'Initial Connection']) {
@@ -1362,7 +1365,7 @@ function ciLeads(allocatorId) {
 }
 let ciId = null, ciEdit = null;
 function renderCiLead() {
-  const cis = db.companies.filter(c => c.type === 'Prime CI').sort((a, b) => a.name.localeCompare(b.name));
+  const cis = db.companies.filter(isIntroducer).sort((a, b) => INTRODUCER_TYPES.indexOf(a.type) - INTRODUCER_TYPES.indexOf(b.type) || a.name.localeCompare(b.name));
   if (!cis.some(c => c.id === ciId)) ciId = cis[0]?.id || null;
   const allocators = db.companies.filter(c => c.type === 'Investor' || c.type === 'Other');
   const rows = allocators.flatMap(c => ciLeads(c.id).filter(l => l.ciId === ciId).map(l => {
@@ -1375,14 +1378,14 @@ function renderCiLead() {
     return [esc(r.pairing.detail), fmtMonth(r.pairing.date)].filter(Boolean).join(' · ');
   };
   view.innerHTML = `
-    <div class="pagehead"><div><h1>CI Lead</h1><p class="sub">Allocators a cap intro counterparty leads, with the latest interaction on each. Where no lead is set, this uses the initial connection, then the earliest entry with a Prime CI.</p></div>
-      <div class="toolbar"><label class="lbl" for="ci-co">Prime CI</label>
-        <select id="ci-co">${cis.map(c => `<option value="${c.id}" ${c.id === ciId ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+    <div class="pagehead"><div><h1>CI Lead</h1><p class="sub">Allocators a cap intro counterparty leads, with the latest interaction on each. Where no lead is set, this uses the initial connection, then the earliest entry with an introducer.</p></div>
+      <div class="toolbar"><label class="lbl" for="ci-co">Introducer</label>
+        <select id="ci-co">${typedCoOpts(INTRODUCER_TYPES, ciId)}</select>
         <button type="button" class="btn" id="ci-new">Add relationship</button></div></div>
     <div class="stack">
       ${ciEdit ? pairingFormHtml(ciEdit) : ''}
       <div class="tiles">
-        <div class="panel tile"><span class="n">${rows.length}</span><span class="lbl">Allocators</span><span class="small">${unassigned} with no Prime CI at all</span></div>
+        <div class="panel tile"><span class="n">${rows.length}</span><span class="lbl">Allocators</span><span class="small">${unassigned} with no introducer at all</span></div>
         <div class="panel tile"><span class="n">${count('Relationship Lead')}</span><span class="lbl">Relationship Lead</span><span class="small">Set here or under Connections</span></div>
         <div class="panel tile"><span class="n">${count('Initial Connection')}</span><span class="lbl">Initial Connection</span><span class="small">No lead set</span></div>
         <div class="panel tile"><span class="n">${count('Earliest entry')}</span><span class="lbl">Earliest entry</span><span class="small">No lead or initial connection set</span></div>
@@ -1395,7 +1398,7 @@ function renderCiLead() {
           <td>${r.last ? `<a href="#" class="clamp" data-open-int="${r.last.id}">${esc(r.last.desc)}</a>` : ''}</td>
           <td style="text-align:right;white-space:nowrap">${r.basis === 'Relationship Lead' ? `<button type="button" class="btn ghost sm" data-ci-edit="${r.pairing.id}">Edit</button>`
             : `<button type="button" class="btn ghost sm" data-ci-lead="${r.c.id}">Set as lead</button>`}</td></tr>`).join('')
-          : '<tr><td colspan="7" class="muted">No allocators for this Prime CI yet. Use Add relationship to record one.</td></tr>'}
+          : '<tr><td colspan="7" class="muted">No allocators for this introducer yet. Use Add relationship to record one.</td></tr>'}
         </tbody></table></div>
     </div>`;
   const blank = allocatorId => ({ id: null, allocatorId, counterpartyId: ciId, connection: 'Relationship Lead', detail: '', date: '' });
@@ -1420,19 +1423,19 @@ function renderPairings() {
   const filterOpts = (key, sel) => [...new Set(db.pairings.map(p => p[key]))].sort((a, b) => coN(a).localeCompare(coN(b)))
     .map(id => `<option value="${id}" ${id === +sel ? 'selected' : ''}>${esc(coN(id))}</option>`).join('');
   view.innerHTML = `
-    <div class="pagehead"><div><h1>Counterparty Pairings</h1><p class="sub">How each Prime CI is involved with each allocator. ${rows.length} of ${db.pairings.length} shown.</p></div>
+    <div class="pagehead"><div><h1>Counterparty Pairings</h1><p class="sub">How each introducer (Prime CI, third party marketer, prior colleague or friendly LP) is involved with each allocator. ${rows.length} of ${db.pairings.length} shown.</p></div>
       <div class="toolbar">
         <label class="lbl" for="pa-f-conn">Connection</label>
         <select id="pa-f-conn"><option value="">All connections</option>${connections.map(c => `<option value="${esc(c)}" ${c === paConn ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
         <label class="lbl" for="pa-f-al">Allocator</label>
         <select id="pa-f-al"><option value="">All</option>${filterOpts('allocatorId', paAllocator)}</select>
-        <label class="lbl" for="pa-f-cp">Prime CI</label>
+        <label class="lbl" for="pa-f-cp">Introducer</label>
         <select id="pa-f-cp"><option value="">All</option>${filterOpts('counterpartyId', paCounterparty)}</select>
         <button type="button" class="btn" id="pa-new">Add pairing</button></div></div>
     <div class="stack">
       ${editing ? pairingFormHtml(editing) : ''}
       <div class="panel tbl-wrap"><table>
-        <thead><tr><th>Allocator</th><th>Prime CI</th><th>Connection</th><th>Detail</th><th>Date</th><th></th></tr></thead>
+        <thead><tr><th>Allocator</th><th>Introducer</th><th>Connection</th><th>Detail</th><th>Date</th><th></th></tr></thead>
         <tbody>${rows.length ? rows.map(p => `<tr>
           <td>${coPill(company(p.allocatorId))}</td><td>${coPill(company(p.counterpartyId))}</td><td>${esc(p.connection)}</td><td>${esc(p.detail)}</td><td class="mono">${fmtMonth(p.date)}</td>
           <td style="text-align:right"><button type="button" class="btn ghost sm" data-pa-edit="${p.id}">Edit</button></td></tr>`).join('')
@@ -1458,7 +1461,7 @@ function pairingFormHtml(editing) {
         <h2>${editing.id ? 'Edit pairing' : 'New pairing'}</h2>
         <div class="fgrid">
           <div class="field"><label class="lbl" for="pa-al">Allocator</label><select id="pa-al"><option value="">Choose an allocator</option>${typedOpts(['Investor', 'Other'], editing.allocatorId)}</select></div>
-          <div class="field"><label class="lbl" for="pa-cp">Prime CI</label><select id="pa-cp"><option value="">Choose a Prime CI</option>${typedOpts(['Prime CI', 'Other'], editing.counterpartyId)}</select></div>
+          <div class="field"><label class="lbl" for="pa-cp">Introducer</label><select id="pa-cp"><option value="">Choose an introducer</option>${typedOpts([...INTRODUCER_TYPES, 'Other'], editing.counterpartyId)}</select></div>
           <div class="field"><label class="lbl" for="pa-conn">Connection</label><input type="text" id="pa-conn" list="pa-conn-list" maxlength="50" value="${esc(editing.connection)}" placeholder="Choose or type a connection">
             <datalist id="pa-conn-list">${pairingConnections().map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
           <div class="field"><label class="lbl" for="pa-detail">Detail <em>(optional)</em></label><input type="text" id="pa-detail" maxlength="200" value="${esc(editing.detail)}"></div>
@@ -1483,7 +1486,7 @@ function wirePairingForm(editing, close) {
     const rec = { allocatorId: +view.querySelector('#pa-al').value, counterpartyId: +view.querySelector('#pa-cp').value, connection: view.querySelector('#pa-conn').value.trim(),
       detail: view.querySelector('#pa-detail').value.trim(), date: view.querySelector('#pa-date').value ? view.querySelector('#pa-date').value + '-01' : '' };
     if (!rec.allocatorId) { err.textContent = 'Choose the allocator.'; return; }
-    if (!rec.counterpartyId) { err.textContent = 'Choose the Prime CI.'; return; }
+    if (!rec.counterpartyId) { err.textContent = 'Choose the introducer.'; return; }
     if (rec.allocatorId === rec.counterpartyId) { err.textContent = 'Choose two different companies.'; return; }
     if (!rec.connection) { err.textContent = 'Add the connection.'; return; }
     // Reuse the existing spelling, so a filter on the connection finds every row.
@@ -1652,7 +1655,7 @@ function importWorkbook(buf, filename) {
   const pairings = [];
   if (wb.SheetNames.some(n => lc(n) === 'counterparty pairing')) readSheet(wb, 'Counterparty Pairing').forEach((r, i) => {
     const al = coByName.get(lc(col(r, 'Allocator'))), cp = coByName.get(lc(col(r, 'Prime CI'))), connection = str(col(r, 'Connection'));
-    if (!al || !cp || !connection) { warn.push(`Pairing on row ${i + 2} skipped: it needs a known allocator, a known Prime CI and a connection.`); return; }
+    if (!al || !cp || !connection) { warn.push(`Pairing on row ${i + 2} skipped: it needs a known allocator, a known introducer and a connection.`); return; }
     pairings.push({ id: +col(r, 'Pairing ID') || 100000 + i, allocatorId: al.id, counterpartyId: cp.id, connection, detail: str(col(r, 'Detail')), date: xlDate(col(r, 'Date')) });
   });
 
