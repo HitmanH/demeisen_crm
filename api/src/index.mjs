@@ -21,7 +21,7 @@ async function connect() {
   });
 }
 
-const COMPANY_TYPES = ['Investor', 'Prime CI', 'Other', 'Demeisen'];
+const COMPANY_TYPES = ['Investor', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'];
 const norm = v => (v === undefined || v === null || v === '' ? null : String(v));
 
 /* Update one row inside a transaction. Rejects if someone else changed it since it was
@@ -62,7 +62,7 @@ function actionFields(b) {
   return { description: cleanText(b.desc, 1000, 'action', true), due_date: cleanDate(b.due, 'due date'), owner_person_id: cleanInt(b.ownerId, 'owner') };
 }
 function pairingFields(b) {
-  return { allocator_company_id: cleanInt(b.allocatorId, 'allocator', true), counterparty_company_id: cleanInt(b.counterpartyId, 'Prime CI', true),
+  return { allocator_company_id: cleanInt(b.allocatorId, 'allocator', true), counterparty_company_id: cleanInt(b.counterpartyId, 'counterparty', true),
     connection_type: cleanText(b.connection, 50, 'connection', true), connection_detail: cleanText(b.detail, 200, 'detail'), connection_date: cleanDate(b.date, 'date') };
 }
 const pairingWrite = async fn => {
