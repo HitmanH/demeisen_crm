@@ -71,6 +71,8 @@ header.top .wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wra
 .brand { font-family: var(--f-display); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
 .brand span { font-family: var(--f-body); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-left: 8px; }
 nav.tabs { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+header.top .top-log { align-self: flex-start; margin-top: 2px; }
+header.top .top-log[aria-current="page"] { box-shadow: 0 0 0 2px var(--accent-soft); }
 .tab-row { display: flex; flex-wrap: wrap; gap: 2px; }
 nav.tabs a { padding: 8px 12px; border-radius: var(--r); color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
 nav.tabs a:hover { color: var(--ink); background: var(--hover); }
@@ -289,8 +291,8 @@ td.num, th.num { text-align: right; }
         <a href="#home" data-view="home">Overview</a>
         <a href="#todo" data-view="todo">To-do</a>
         <a href="#interactions" data-view="interactions">Interactions</a>
-        <a href="#allocator" data-view="allocator">External Party One Pager</a>
-        <a href="#log" data-view="log">Log interaction / intel</a>
+        <a href="#allocator" data-view="allocator">Allocator One Pager</a>
+        <a href="#capintro" data-view="capintro">Cap Intro One Pager</a>
         <a href="#search" data-view="search">Search</a>
       </div>
       <div class="tab-row">
@@ -305,6 +307,7 @@ td.num, th.num { text-align: right; }
         <a href="#settings" data-view="settings">Settings</a>
       </div>
     </nav>
+    <a class="btn top-log" href="#log" data-view="log">Log interaction / intel</a>
   </div>
 </header>
 <div class="proforma" id="settings-pane" style="display:none">
@@ -478,12 +481,12 @@ function toast(msg) {
 }
 
 /* ---------- Routing ---------- */
-const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, capintro: renderCapIntro, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
 const view = document.getElementById('view');
 function route() {
   let v = location.hash.slice(1);
   if (!VIEWS[v]) v = 'home';
-  document.querySelectorAll('nav.tabs a').forEach(a => { if (a.dataset.view === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  document.querySelectorAll('nav.tabs a, header.top .top-log').forEach(a => { if (a.dataset.view === v) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   document.querySelectorAll('nav.tabs .menu').forEach(m => { m.open = false; m.classList.toggle('has-current', !!m.querySelector(`a[data-view="${v}"]`)); });
   document.getElementById('settings-pane').style.display = v === 'settings' ? '' : 'none';
   VIEWS[v]();
@@ -763,7 +766,7 @@ function renderHome() {
 
   view.innerHTML = `
     <div class="pagehead"><div><h1>Overview</h1><p class="sub">${today}</p></div>
-      <a class="btn" href="#log">Log interaction / intel</a></div>
+    </div>
     <div class="stack">
       <div class="tiles">
         <a class="panel tile" href="#interactions"><span class="n">${last7.length}</span><span class="lbl">Entries, last 7 days</span><span class="small">${split(last7)}</span></a>
@@ -810,18 +813,27 @@ const SHARE_TYPES = [
   ['NDA', /\bNDA\b/],
   ['Term sheet', /term ?sheet/i],
 ];
-let allocId = null;
+let allocId = null, capId = null;
+const ALLOCATOR_TYPES = ['Investor', 'Other'];
+const typedCoOpts = (types, sel) => types.map(t => {
+  const cs = db.companies.filter(c => c.type === t).sort((a, b) => a.name.localeCompare(b.name));
+  return cs.length ? `<optgroup label="${t}">${cs.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : '';
+}).join('');
+// Prime CI companies open the cap intro one-pager; everyone else the allocator one.
+function openOnePager(id) {
+  if (company(id)?.type === 'Prime CI') { capId = id; goto('capintro'); } else { allocId = id; goto('allocator'); }
+}
 function renderAllocator() {
-  if (!allocId || !company(allocId) || company(allocId).type === 'Demeisen') {
+  if (!allocId || !ALLOCATOR_TYPES.includes(company(allocId)?.type)) {
     const latest = [...db.interactions].sort(byRecent).find(i => company(i.companyId)?.type === 'Investor');
     allocId = latest ? latest.companyId : db.companies.find(c => c.type === 'Investor')?.id || null;
   }
   const c = company(allocId);
   view.innerHTML = `
-    <div class="pagehead"><div><h1>External Party One Pager</h1><p class="sub">Everything on one external party: contacts, history, what we've shared and what's outstanding.</p></div>
-      <div class="toolbar"><label class="lbl" for="al-co">External party</label>
-        <select id="al-co">${companyOpts(allocId)}</select></div></div>
-    <div id="al-body">${c ? allocatorBody(c) : '<div class="panel empty">Add a company to see its one-pager.</div>'}</div>`;
+    <div class="pagehead"><div><h1>Allocator One Pager</h1><p class="sub">Everything on one allocator: contacts, history, what we've shared and what's outstanding.</p></div>
+      <div class="toolbar"><label class="lbl" for="al-co">Allocator</label>
+        <select id="al-co">${typedCoOpts(ALLOCATOR_TYPES, allocId)}</select></div></div>
+    <div id="al-body">${c ? allocatorBody(c) : '<div class="panel empty">Add an investor company to see its one-pager.</div>'}</div>`;
   view.querySelector('#al-co').addEventListener('change', e => { allocId = +e.target.value; renderAllocator(); });
   view.querySelector('#op-stage')?.addEventListener('change', e => setStage(c, e.target.value, e.target));
 }
@@ -861,14 +873,6 @@ function allocatorBody(c) {
     return { label, n: hits.length, first: hits[hits.length - 1]?.date, last: hits[0]?.date, lastId: hits[0]?.id };
   }).filter(s => s.n);
 
-  // activity by month, from first contact to this month
-  let months = [];
-  if (first?.date) {
-    const d = new Date(first.date.slice(0, 7) + '-01T00:00'), end = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
-    while (d <= end && months.length < 24) { months.push(iso(d).slice(0, 7)); d.setMonth(d.getMonth() + 1); }
-  }
-  const perMonth = months.map(m => its.filter(i => i.date.startsWith(m)).length);
-  const maxM = Math.max(1, ...perMonth);
 
   return `<div class="stack">
     <section class="panel op-head">
@@ -897,10 +901,7 @@ function allocatorBody(c) {
       <div class="panel tile ${openActs.some(a => bucket(a) === 'overdue') ? 'crit' : ''}"><span class="n">${openActs.length}</span><span class="lbl">Open actions</span><span class="small">${openActs.filter(a => bucket(a) === 'overdue').length} overdue</span></div>
     </div>
 
-    ${months.length ? `<section class="panel"><div class="sec-head"><h2>Activity by month</h2></div>
-      <div class="months">${months.map((m, k) => `<div class="month"><span class="cnt">${perMonth[k]}</span>
-        <div class="barwrap"><div class="bar ${perMonth[k] ? '' : 'zero'}" style="height:${perMonth[k] ? Math.max(4, perMonth[k] / maxM * 100) : 4}%"></div></div>
-        <span class="m">${new Date(m + '-01T00:00').toLocaleDateString('en-GB', { month: 'short' })}</span></div>`).join('')}</div></section>` : ''}
+    ${activityPanel(its)}
 
     <div class="two-col">
       <div class="stack">
@@ -936,6 +937,118 @@ function allocatorBody(c) {
   </div>`;
 }
 
+// Entries per month, from the first entry to this month (up to 24 months). its is sorted newest first.
+function activityPanel(its) {
+  const first = its[its.length - 1];
+  const months = [];
+  if (first?.date) {
+    const d = new Date(first.date.slice(0, 7) + '-01T00:00'), end = new Date(TODAY.getFullYear(), TODAY.getMonth(), 1);
+    while (d <= end && months.length < 24) { months.push(iso(d).slice(0, 7)); d.setMonth(d.getMonth() + 1); }
+  }
+  if (!months.length) return '';
+  const perMonth = months.map(m => its.filter(i => i.date.startsWith(m)).length);
+  const maxM = Math.max(1, ...perMonth);
+  return `<section class="panel"><div class="sec-head"><h2>Activity by month</h2></div>
+    <div class="months">${months.map((m, k) => `<div class="month"><span class="cnt">${perMonth[k]}</span>
+      <div class="barwrap"><div class="bar ${perMonth[k] ? '' : 'zero'}" style="height:${perMonth[k] ? Math.max(4, perMonth[k] / maxM * 100) : 4}%"></div></div>
+      <span class="m">${new Date(m + '-01T00:00').toLocaleDateString('en-GB', { month: 'short' })}</span></div>`).join('')}</div></section>`;
+}
+
+/* ---------- Cap intro one-pager ---------- */
+function renderCapIntro() {
+  const cis = db.companies.filter(c => c.type === 'Prime CI');
+  if (!cis.some(c => c.id === capId)) {
+    const latest = [...db.interactions].sort(byRecent).find(i => company(i.viaId)?.type === 'Prime CI' || company(i.companyId)?.type === 'Prime CI');
+    capId = latest ? (company(latest.viaId)?.type === 'Prime CI' ? latest.viaId : latest.companyId) : [...cis].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || null;
+  }
+  const c = company(capId);
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Cap Intro One Pager</h1><p class="sub">Everything on one cap intro team: the allocators they introduced or lead, their people, activity and what's outstanding.</p></div>
+      <div class="toolbar"><label class="lbl" for="cap-co">Prime CI</label>
+        <select id="cap-co">${typedCoOpts(['Prime CI'], capId)}</select></div></div>
+    <div>${c ? capIntroBody(c) : '<div class="panel empty">Add a Prime CI company to see its one-pager.</div>'}</div>`;
+  view.querySelector('#cap-co').addEventListener('change', e => { capId = +e.target.value; renderCapIntro(); });
+}
+function capIntroBody(c) {
+  const its = db.interactions.filter(i => i.companyId === c.id || i.viaId === c.id).sort(byRecent);
+  const last = its[0];
+  const direct = its.filter(i => i.companyId === c.id).length;
+  const pairs = db.pairings.filter(p => p.counterpartyId === c.id);
+  const viaIts = its.filter(i => i.viaId === c.id && i.companyId && i.companyId !== c.id);
+  const allocIds = [...new Set([...pairs.map(p => p.allocatorId), ...viaIts.map(i => i.companyId)])];
+  const allocators = allocIds.map(company).filter(Boolean).map(a => {
+    const mine = viaIts.filter(i => i.companyId === a.id);
+    return { a, conns: pairs.filter(p => p.allocatorId === a.id), n: mine.length, firstVia: mine[mine.length - 1]?.date,
+      lead: ciLeads(a.id).some(l => l.ciId === c.id), last: db.interactions.filter(i => i.companyId === a.id).sort(byRecent)[0] };
+  }).sort((x, y) => (y.last?.date || '').localeCompare(x.last?.date || '') || x.a.name.localeCompare(y.a.name));
+  const itIds = new Set(its.map(i => i.id));
+  const openActs = db.actions.filter(a => itIds.has(a.interactionId) && a.status === 'Open').sort(byDue);
+  const team = db.people.filter(p => p.companyId === c.id)
+    .map(p => { const mine = its.filter(i => i.people.includes(p.id)); return { p, n: mine.length, last: mine[0]?.date }; })
+    .sort((a, b) => b.n - a.n || a.p.name.localeCompare(b.p.name));
+  const coverage = {};
+  its.forEach(i => i.people.forEach(id => { const p = person(id); if (p && company(p.companyId)?.type === 'Demeisen') coverage[p.name] = (coverage[p.name] || 0) + 1; }));
+  const how = r => [...r.conns.map(p => [p.connection, p.detail, fmtMonth(p.date)].filter(Boolean).map(esc).join(' · ')),
+    ...(r.n && !r.conns.length ? [`<span class="muted">Via them since ${fmt(r.firstVia)}</span>`] : [])].join('<br>');
+
+  return `<div class="stack">
+    <section class="panel op-head">
+      <div>
+        <h2 class="op-name" style="text-transform:none;letter-spacing:-0.01em;color:var(--ink)">${esc(c.name)}</h2>
+        <div class="op-tags"><span class="pill ${tcls(c.type)}">${esc(c.type)}</span>
+          ${c.investorType ? `<span class="pill ixn">${esc(c.investorType)}</span>` : ''}</div>
+        <div class="op-facts">
+          ${Object.keys(coverage).length ? `<span>Covered by: <strong>${Object.entries(coverage).sort((a, b) => b[1] - a[1]).map(([n, k]) => `${esc(n)} (${k})`).join(', ')}</strong></span>` : ''}
+          ${c.notes ? `<span>${esc(c.notes)}</span>` : ''}
+        </div>
+      </div>
+      <div class="op-actions">
+        <button type="button" class="btn" data-log-co="${c.id}">Log interaction / intel</button>
+        <button type="button" class="btn ghost" data-ix-co="${c.id}">All entries</button>
+        <button type="button" class="btn ghost" data-ci-view="${c.id}">CI Lead</button>
+      </div>
+    </section>
+
+    <div class="tiles">
+      <div class="panel tile"><span class="n date">${last ? fmt(last.date) : 'None'}</span><span class="lbl">Last activity</span><span class="small">${last ? agoLabel(last.date) : 'No entries yet'}</span></div>
+      <div class="panel tile"><span class="n">${allocators.length}</span><span class="lbl">Allocators</span><span class="small">${allocators.filter(r => r.lead).length} where they lead</span></div>
+      <div class="panel tile"><span class="n">${its.length}</span><span class="lbl">Entries</span><span class="small">${direct} with them · ${its.length - direct} via them</span></div>
+      <div class="panel tile ${openActs.some(a => bucket(a) === 'overdue') ? 'crit' : ''}"><span class="n">${openActs.length}</span><span class="lbl">Open actions</span><span class="small">${openActs.filter(a => bucket(a) === 'overdue').length} overdue</span></div>
+    </div>
+
+    <section class="panel">
+      <div class="sec-head"><h2>Allocators introduced or connected</h2><button type="button" class="linkbtn" data-ci-view="${c.id}">Set leads on CI Lead</button></div>
+      ${allocators.length ? `<div class="tbl-wrap"><table class="ix-table">
+        <thead><tr><th>Allocator</th><th>Engagement stage</th><th>Connection</th><th class="num">Via them</th><th>Latest with allocator</th></tr></thead>
+        <tbody>${allocators.map(r => `<tr><td>${coPill(r.a)}${r.lead ? ' <span class="pill done">Lead</span>' : ''}</td><td>${esc(r.a.stage || '')}</td><td>${how(r)}</td>
+          <td class="num">${r.n}</td><td>${r.last ? `<span class="mono">${fmt(r.last.date)}</span> <a href="#" class="clamp" data-open-int="${r.last.id}">${esc(r.last.desc)}</a>` : '<span class="muted">None</span>'}</td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="empty">No allocators linked yet. Record one under CI Lead or Connections, or log an entry with this Prime CI as Via.</div>'}
+    </section>
+
+    ${activityPanel(its)}
+
+    <div class="two-col">
+      <section class="panel">
+        <div class="sec-head"><h2>Most recent activity</h2>${its.length > 6 ? `<button type="button" class="linkbtn" data-ix-co="${c.id}">All ${its.length}</button>` : ''}</div>
+        <ul class="feed">${its.slice(0, 6).map(it => feedItem(it, true, 3)).join('') || '<li class="muted">Nothing logged yet.</li>'}</ul>
+      </section>
+      <div class="stack">
+        <section class="panel">
+          <div class="sec-head"><h2>Deliverables</h2><a href="#todo" class="linkbtn">To-do</a></div>
+          ${openActs.length ? `<ul class="acts">${openActs.map(actionRow).join('')}</ul>` : '<div class="empty">No open actions.</div>'}
+        </section>
+        <section class="panel">
+          <div class="sec-head"><h2>Their team</h2><span><button type="button" class="btn ghost sm" data-pe-new="${c.id}">Add person</button>
+            <button type="button" class="linkbtn" data-pe-co="${c.id}">People</button></span></div>
+          ${team.length ? `<div class="tbl-wrap"><table class="small-tbl"><thead><tr><th>Name</th><th class="num">Entries</th><th>Last</th></tr></thead>
+            <tbody>${team.map(x => `<tr><td><strong>${esc(x.p.name)}</strong>${x.p.title ? `<div class="muted" style="font-size:12px">${esc(x.p.title)}</div>` : ''}</td><td class="num">${x.n}</td><td class="mono">${x.last ? fmt(x.last) : ''}</td></tr>`).join('')}</tbody></table></div>`
+            : '<div class="empty">No people recorded.</div>'}
+        </section>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ---------- Interactions list ---------- */
 let ixState = { type: 'all', company: '', open: new Set(), focus: null };
 function openInteraction(id) { ixState = { type: 'all', company: '', open: new Set([id]), focus: id }; goto('interactions'); }
@@ -958,7 +1071,7 @@ function renderInteractions() {
   const count = t => db.interactions.filter(i => t === 'all' || i.type === t).length;
   view.innerHTML = `
     <div class="pagehead"><div><h1>Interactions &amp; intel</h1><p class="sub">Everything logged, newest first. Click a row to see the full entry.</p></div>
-      <div class="toolbar"><a class="btn" href="#log">Log interaction / intel</a>
+      <div class="toolbar">
         <button type="button" class="btn ghost" id="ix-contacts" data-pe-co="${esc(ixState.company)}">Contacts</button></div></div>
     <div class="stack">
       <div class="toolbar">
@@ -1393,7 +1506,9 @@ view.addEventListener('click', e => {
   const open = e.target.closest('[data-open-int]');
   if (open) { e.preventDefault(); openInteraction(+open.dataset.openInt); return; }
   const fc = e.target.closest('[data-filter-co]');
-  if (fc) { e.preventDefault(); allocId = +fc.dataset.filterCo; goto('allocator'); return; }
+  if (fc) { e.preventDefault(); openOnePager(+fc.dataset.filterCo); return; }
+  const cv = e.target.closest('[data-ci-view]');
+  if (cv) { e.preventDefault(); ciId = +cv.dataset.ciView; ciEdit = null; goto('cilead'); return; }
   const ixc = e.target.closest('[data-ix-co]');
   if (ixc) { e.preventDefault(); ixState = { type: 'all', company: ixc.dataset.ixCo, open: new Set(), focus: null }; goto('interactions'); return; }
   const lg = e.target.closest('[data-log-co]');
