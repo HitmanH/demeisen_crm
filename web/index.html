@@ -300,6 +300,7 @@ td.num, th.num { text-align: right; }
       <div class="tab-row">
         <a href="#home" data-view="home">Overview</a>
         <a href="#todo" data-view="todo">To-do</a>
+        <a href="#current" data-view="current">Current Investors</a>
         <a href="#targeted" data-view="targeted">Targeted Allocators</a>
         <a href="#allocator" data-view="allocator">Allocator One Pager</a>
         <a href="#capintro" data-view="capintro">Cap Intro One Pager</a>
@@ -495,7 +496,7 @@ function toast(msg) {
 }
 
 /* ---------- Routing ---------- */
-const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, targeted: renderTargeted, capintro: renderCapIntro, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, current: () => renderStagePage('current'), targeted: () => renderStagePage('targeted'), capintro: renderCapIntro, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
 const view = document.getElementById('view');
 function route() {
   let v = location.hash.slice(1);
@@ -968,37 +969,44 @@ function activityPanel(its) {
       <span class="m">${new Date(m + '-01T00:00').toLocaleDateString('en-GB', { month: 'short' })}</span></div>`).join('')}</div></section>`;
 }
 
-/* ---------- Targeted allocators ---------- */
-// Groups follow the engagement stage order (1 to 12) in the stage list, so a rename keeps its group.
-const TARGET_GROUPS = [
-  ['Current', [1, 2], 'Current investors, CF and SMA'],
-  ['Process', [3, 4], 'Onboarding and active progress'],
-  ['Focus', [5, 6], 'Target investors and in process'],
-  ['Catalyst needed', [7], 'Keen, catalyst needed'],
-  ['Distribution list', [8], 'On the distribution list'],
-  ['Other', [9, 10, 11, 12], 'Met, not interested, not connected, and not yet classified']
-];
-let tgtOpen = null;
-function renderTargeted() {
-  const st = stages();
-  const groupOf = c => { const n = st.indexOf(c.stage) + 1; return TARGET_GROUPS.findIndex(g => g[1].includes(n)); };
-  const rows = db.companies.filter(c => ALLOCATOR_TYPES.includes(c.type)).map(c => {
+/* ---------- Current investors and targeted allocators ---------- */
+// Two pages of allocators grouped by engagement stage. Groups follow the stage order (1 to 12) in the
+// stage list, so a rename keeps its group. Allocators with no recognised stage show under Targeted > Other.
+const STAGE_PAGES = {
+  current: { title: 'Current Investors', sub: 'Current investors in the comingled fund and SMAs, each with its open to-dos and latest interactions, most recently contacted first.',
+    groups: [['Current Investor (CF)', [1]], ['Current Investor (SMA)', [2]]] },
+  targeted: { title: 'Targeted Allocators', sub: 'Allocators we are working on, grouped by engagement stage, each with its open to-dos and latest interactions, most recently contacted first.',
+    groups: [['Process', [3, 4]], ['Focus', [5, 6]], ['Catalyst needed', [7]], ['Distribution list', [8]], ['Other', [9, 10, 11, 12]]], unclassified: 'Other' }
+};
+const stageOpen = {};
+function renderStagePage(key) {
+  const cfg = STAGE_PAGES[key], st = stages();
+  const groups = cfg.groups.map(([name, nums]) => ({ name, nums, stages: nums.map(n => st[n - 1]).filter(Boolean), rows: [] }));
+  db.companies.filter(c => ALLOCATOR_TYPES.includes(c.type)).forEach(c => {
+    const n = st.indexOf(c.stage) + 1;
+    const g = groups.find(x => x.nums.includes(n)) || (n ? null : groups.find(x => x.name === cfg.unclassified));
+    if (!g) return;
     const its = db.interactions.filter(i => i.companyId === c.id).sort(byRecent);
     const ids = new Set(its.map(i => i.id));
-    const todo = db.actions.filter(a => a.status === 'Open' && ids.has(a.interactionId)).sort(byDue);
-    return { c, g: groupOf(c), its, todo, last: its[0]?.date || '' };
-  }).sort((a, b) => b.last.localeCompare(a.last) || a.c.name.localeCompare(b.c.name));
-  const groups = TARGET_GROUPS.map((g, k) => ({ name: g[0], hint: g[2], stages: g[1].map(n => st[n - 1]).filter(Boolean), rows: rows.filter(r => r.g === k || (k === TARGET_GROUPS.length - 1 && r.g < 0)) }));
-  if (!tgtOpen) tgtOpen = new Set(groups.slice(0, -1).map(g => g.name)); // everything but Other starts open
+    g.rows.push({ c, its, todo: db.actions.filter(a => a.status === 'Open' && ids.has(a.interactionId)).sort(byDue), last: its[0]?.date || '' });
+  });
+  groups.forEach(g => g.rows.sort((a, b) => b.last.localeCompare(a.last) || a.c.name.localeCompare(b.c.name)));
+  if (!stageOpen[key]) stageOpen[key] = new Set(groups.filter(g => g.name !== 'Other').map(g => g.name)); // Other starts collapsed
+  const open = stageOpen[key];
+  const all = groups.flatMap(g => g.rows), todos = all.flatMap(r => r.todo);
+  const gid = g => 'stg-' + g.name.replace(/\W/g, '');
+  const tiles = groups.filter(g => g.name !== 'Other').map(g => `<a class="panel tile" href="#${gid(g)}" data-tgt-jump="${esc(g.name)}"><span class="n">${g.rows.length}</span><span class="lbl">${esc(g.name)}</span><span class="small">${g.rows.reduce((n, r) => n + r.todo.length, 0)} open to-dos</span></a>`);
+  if (tiles.length < 4) tiles.push(`<div class="panel tile"><span class="n">${todos.length}</span><span class="lbl">Open to-dos</span><span class="small">${(n => `Across ${n} investor${n === 1 ? '' : 's'}`)(all.filter(r => r.todo.length).length)}</span></div>`);
+  if (tiles.length < 4) { const od = todos.filter(a => bucket(a) === 'overdue').length; tiles.push(`<div class="panel tile ${od ? 'crit' : ''}"><span class="n">${od}</span><span class="lbl">Overdue</span><span class="small">${todos.filter(a => bucket(a) === 'week').length} due in next 7 days</span></div>`); }
   const todoList = r => r.todo.length ? `<ul class="tgt-list">${r.todo.slice(0, 4).map(a => `<li><span class="mono ${bucket(a) === 'overdue' ? 'over' : ''}">${a.due ? fmt(a.due) : 'No date'}</span><span class="txt">${esc(a.desc)}${person(a.ownerId) ? ` <span class="muted">· ${esc(person(a.ownerId).name)}</span>` : ''}</span></li>`).join('')}
     ${r.todo.length > 4 ? `<li class="muted">and ${r.todo.length - 4} more</li>` : ''}</ul>` : '<span class="muted">None open</span>';
   const ixList = r => r.its.length ? `<ul class="tgt-list">${r.its.slice(0, 3).map(i => `<li><span class="mono">${fmt(i.date)}</span><a href="#" class="txt" data-open-int="${i.id}">${i.format ? esc(i.format) + ': ' : ''}${esc(i.desc)}</a></li>`).join('')}</ul>` : '<span class="muted">No interactions yet</span>';
   view.innerHTML = `
-    <div class="pagehead"><div><h1>Targeted Allocators</h1><p class="sub">Allocators grouped by engagement stage, each with its open to-dos and latest interactions, most recently contacted first. Set a stage here or on the allocator's one-pager; it saves straight away.</p></div></div>
+    <div class="pagehead"><div><h1>${cfg.title}</h1><p class="sub">${cfg.sub} Set a stage here or on the one-pager; it saves straight away.</p></div></div>
     <div class="stack">
-      <div class="tiles">${groups.slice(0, 4).map(g => `<a class="panel tile" href="#tgt-${g.name.replace(/\W/g, '')}" data-tgt-jump="${esc(g.name)}"><span class="n">${g.rows.length}</span><span class="lbl">${esc(g.name)}</span><span class="small">${g.rows.reduce((n, r) => n + r.todo.length, 0)} open to-dos</span></a>`).join('')}</div>
-      ${groups.map(g => `<details class="panel tgt-group" id="tgt-${g.name.replace(/\W/g, '')}" data-tgt="${esc(g.name)}" ${tgtOpen.has(g.name) ? 'open' : ''}>
-        <summary class="sec-head"><h2>${esc(g.name)} <span class="mono">${g.rows.length}</span></h2><span class="muted" style="font-size:12.5px">${esc(g.stages.join(' · ') || g.hint)}</span></summary>
+      <div class="tiles">${tiles.join('')}</div>
+      ${groups.map(g => `<details class="panel tgt-group" id="${gid(g)}" data-tgt="${esc(g.name)}" ${open.has(g.name) ? 'open' : ''}>
+        <summary class="sec-head"><h2>${esc(g.name)} <span class="mono">${g.rows.length}</span></h2><span class="muted" style="font-size:12.5px">${esc(g.stages.join(' · '))}${g.name === cfg.unclassified ? ' · not yet classified' : ''}</span></summary>
         ${g.rows.length ? `<div class="tbl-wrap"><table class="ix-table">
           <thead><tr><th>Allocator</th><th>Engagement stage</th><th>Open to-dos</th><th>Latest interactions</th></tr></thead>
           <tbody>${g.rows.map(r => `<tr><td>${coPill(r.c)}</td><td class="nowrap"><select class="tgt-stage" data-stage-co="${r.c.id}" aria-label="Engagement stage for ${esc(r.c.name)}">${stageOpts(r.c.stage)}</select></td><td style="min-width:220px">${todoList(r)}</td><td style="min-width:300px">${ixList(r)}</td></tr>`).join('')}</tbody></table></div>`
@@ -1006,7 +1014,7 @@ function renderTargeted() {
       </details>`).join('')}
     </div>`;
   view.querySelectorAll('.tgt-stage').forEach(sel => sel.addEventListener('change', () => setStage(company(+sel.dataset.stageCo), sel.value, sel)));
-  view.querySelectorAll('details.tgt-group').forEach(d => d.addEventListener('toggle', () => { if (d.open) tgtOpen.add(d.dataset.tgt); else tgtOpen.delete(d.dataset.tgt); }));
+  view.querySelectorAll('details.tgt-group').forEach(d => d.addEventListener('toggle', () => { if (d.open) open.add(d.dataset.tgt); else open.delete(d.dataset.tgt); }));
   view.querySelectorAll('[data-tgt-jump]').forEach(a => a.addEventListener('click', e => {
     e.preventDefault();
     const d = view.querySelector(`details[data-tgt="${CSS.escape(a.dataset.tgtJump)}"]`);
