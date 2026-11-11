@@ -77,22 +77,26 @@ const insert = async (c, table, f) => {
 
 /* ---------- Reads ---------- */
 async function getData(c) {
-  const [[companies], [people], [interactions], [links], [actions], [edited], [pairings], [stages]] = await Promise.all([
+  const [[companies], [people], [interactions], [links], [actions], [edited], [pairings], [stages], [materials], [materialTypes]] = await Promise.all([
     c.query('SELECT * FROM company'), c.query('SELECT * FROM person'), c.query('SELECT * FROM interaction'),
     c.query('SELECT interaction_id, person_id FROM interaction_person'), c.query('SELECT * FROM action'),
     c.query("SELECT DISTINCT interaction_id FROM interaction_history WHERE operation = 'UPDATE'"),
-    c.query('SELECT * FROM counterparty_pairing'), c.query('SELECT stage_name FROM engagement_stage ORDER BY sort_order')
+    c.query('SELECT * FROM counterparty_pairing'), c.query('SELECT stage_name FROM engagement_stage ORDER BY sort_order'),
+    c.query('SELECT interaction_id, material_name, shared_date, version FROM interaction_material'), c.query('SELECT material_name FROM material_type ORDER BY sort_order')
   ]);
+  const matByIx = new Map();
+  materials.forEach(m => { if (!matByIx.has(m.interaction_id)) matByIx.set(m.interaction_id, []); matByIx.get(m.interaction_id).push({ name: m.material_name, date: m.shared_date, version: m.version || '' }); });
   const byIx = new Map();
   links.forEach(l => { if (!byIx.has(l.interaction_id)) byIx.set(l.interaction_id, []); byIx.get(l.interaction_id).push(l.person_id); });
   const wasEdited = new Set(edited.map(e => e.interaction_id));
   return {
     stages: stages.map(x => x.stage_name),
+    materialTypes: materialTypes.map(x => x.material_name),
     companies: companies.map(x => ({ id: x.company_id, type: x.company_type, name: x.name, investorType: x.investor_type || '', investmentType: x.investment_type || '', stage: x.engagement_stage, notes: x.notes || '', validFrom: x.valid_from })),
     people: people.map(x => ({ id: x.person_id, name: x.name, email: x.email || '', companyId: x.company_id, title: x.title || '', phone: x.phone || '',
       personalEmail: x.personal_email || '', linkedin: x.linkedin_url || '', notes: x.notes || '', validFrom: x.valid_from })),
     interactions: interactions.map(x => ({ id: x.interaction_id, type: x.entry_type, date: x.interaction_date, companyId: x.company_id, viaId: x.via_company_id, format: x.format || '',
-      people: byIx.get(x.interaction_id) || [], recordedBy: x.recorded_by_person_id, desc: x.description, next: x.next_steps || '', review: x.review || '', validFrom: x.valid_from,
+      people: byIx.get(x.interaction_id) || [], materials: matByIx.get(x.interaction_id) || [], recordedBy: x.recorded_by_person_id, desc: x.description, next: x.next_steps || '', review: x.review || '', validFrom: x.valid_from,
       ...(wasEdited.has(x.interaction_id) ? { updated: x.valid_from.replace(' ', 'T') + 'Z' } : {}) })),
     actions: actions.map(x => ({ id: x.action_id, desc: x.description, due: x.due_date || '', ownerId: x.owner_person_id, interactionId: x.interaction_id, status: x.status, review: x.review || '', validFrom: x.valid_from })),
     pairings: pairings.map(x => ({ id: x.pairing_id, allocatorId: x.allocator_company_id, counterpartyId: x.counterparty_company_id, connection: x.connection_type, detail: x.connection_detail || '', date: x.connection_date || '', validFrom: x.valid_from }))
@@ -117,6 +121,25 @@ async function saveInteraction(c, id, b) {
   const have = new Set(cur.map(r => r.person_id));
   for (const p of want) if (!have.has(p)) await c.query('INSERT INTO interaction_person (interaction_id, person_id) VALUES (?, ?)', [id, p]);
   for (const p of have) if (!want.has(p)) await c.query('DELETE FROM interaction_person WHERE interaction_id = ? AND person_id = ?', [id, p]);
+
+  // Material shared: one row per item, kept in step with the list sent. Older pages send no list and leave it alone.
+  if (Array.isArray(b.materials)) {
+    const wantM = new Map();
+    for (const m of b.materials) {
+      const name = cleanText(m?.name, 50, 'material', true);
+      wantM.set(name, { shared_date: cleanDate(m.date, `date ${name} was shared`) || f.interaction_date, version: cleanText(m.version, 100, `${name} version`) });
+    }
+    const [curM] = await c.query('SELECT material_name, shared_date, version FROM interaction_material WHERE interaction_id = ? FOR UPDATE', [id]);
+    const haveM = new Map(curM.map(r => [r.material_name, r]));
+    for (const [name, v] of wantM) {
+      const old = haveM.get(name);
+      if (!old) await c.query('INSERT INTO interaction_material (interaction_id, material_name, shared_date, version) VALUES (?, ?, ?, ?)', [id, name, v.shared_date, v.version]);
+      else if (old.shared_date !== v.shared_date || norm(old.version) !== norm(v.version)) {
+        await c.query('UPDATE interaction_material SET shared_date = ?, version = ? WHERE interaction_id = ? AND material_name = ?', [v.shared_date, v.version, id, name]);
+      }
+    }
+    for (const name of haveM.keys()) if (!wantM.has(name)) await c.query('DELETE FROM interaction_material WHERE interaction_id = ? AND material_name = ?', [id, name]);
+  }
 
   const rows = Array.isArray(b.actions) ? b.actions : [];
   const [existing] = await c.query('SELECT action_id FROM action WHERE interaction_id = ? FOR UPDATE', [id]);
@@ -181,6 +204,7 @@ async function handleApi(event) {
     if (c) await c.rollback().catch(() => {});
     if (e instanceof HttpError) return reply(e.status, { error: e.message });
     if (e.errno === 1062) return reply(409, { error: 'That name already exists.' });
+    if (e.errno === 1452 && /material_type/.test(e.message)) return reply(400, { error: 'That material is not in the list. Reload to see the latest list.' });
     if (e.errno === 1452 && /engagement_stage/.test(e.message)) return reply(400, { error: 'That engagement stage is not in the list. Reload to see the latest stages.' });
     if ([1451, 1452, 3819].includes(e.errno)) return reply(400, { error: 'That change breaks a data rule, such as a missing or invalid link.' });
     console.error('request failed', method, path, e.code, e.errno); // no request content in logs
@@ -191,8 +215,8 @@ async function handleApi(event) {
 }
 
 /* ---------- Nightly backup: every table as CSV, a workbook that can seed an empty database, and a manifest with counts ---------- */
-export const BACKUP_TABLES = ['engagement_stage', 'company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing',
-  'company_history', 'person_history', 'interaction_history', 'interaction_person_history', 'action_history', 'counterparty_pairing_history'];
+export const BACKUP_TABLES = ['engagement_stage', 'material_type', 'company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing', 'interaction_material',
+  'company_history', 'person_history', 'interaction_history', 'interaction_person_history', 'action_history', 'counterparty_pairing_history', 'interaction_material_history'];
 
 async function runBackup() {
   const stamp = new Date().toISOString();

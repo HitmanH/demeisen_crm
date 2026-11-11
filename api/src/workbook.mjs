@@ -3,7 +3,7 @@
 import * as XLSX from 'xlsx';
 
 const EXCEL_CELL_LIMIT = 32767;
-const DATE_FMT = { 'Interaction Date': 'dd-mmm-yyyy', 'Action Due Date': 'dd-mmm-yyyy', 'Last Updated': 'dd-mmm-yyyy hh:mm', 'Date': 'mmm-yy' };
+const DATE_FMT = { 'Date Shared': 'dd-mmm-yyyy', 'Interaction Date': 'dd-mmm-yyyy', 'Action Due Date': 'dd-mmm-yyyy', 'Last Updated': 'dd-mmm-yyyy hh:mm', 'Date': 'mmm-yy' };
 // Excel date serials written directly, so no time-zone shift can move a date by a day.
 const xd = s => s ? Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 864e5 + 25569 : '';
 const xdt = s => { if (!s) return ''; const d = new Date(s); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()) / 864e5 + 25569; };
@@ -14,12 +14,13 @@ export const WORKBOOK_COLUMNS = {
   Interaction: ['Interaction ID', 'Entry Type', 'Interaction Date', 'Company Name', 'Format', 'Via (Prime CI)', 'People Involved', 'Interaction Desc',
     'Interaction Next Steps', 'Recorded By', 'Review', 'Last Updated', 'People Involved IDs', 'Recorded By ID'],
   Action: ['Action ID', 'Action Desc', 'Action Due Date', 'Status', 'Owner', 'Interaction ID', 'Company', 'Review', 'Owner ID'],
-  'Counterparty Pairing': ['Pairing ID', 'Allocator', 'Prime CI', 'Connection', 'Detail', 'Date']
+  'Counterparty Pairing': ['Pairing ID', 'Allocator', 'Prime CI', 'Connection', 'Detail', 'Date'],
+  'Material Shared': ['Interaction ID', 'Company', 'Material', 'Date Shared', 'Version']
 };
 const WIDTHS = {
   Company: [11, 13, 36, 18, 18, 26, 60], Person: [10, 26, 32, 34, 20, 16, 32, 40, 46],
   Interaction: [12, 12, 14, 30, 12, 16, 40, 80, 40, 15, 36, 18, 16, 12], Action: [10, 62, 15, 10, 15, 13, 30, 40, 10],
-  'Counterparty Pairing': [10, 36, 36, 30, 36, 10]
+  'Counterparty Pairing': [10, 36, 36, 30, 36, 10], 'Material Shared': [13, 36, 28, 14, 30]
 };
 
 function sheet(tab, rows) {
@@ -58,5 +59,8 @@ export function buildWorkbook(data) {
     'Owner ID': a.ownerId || '' }))), 'Action');
   XLSX.utils.book_append_sheet(wb, sheet('Counterparty Pairing', sortId(data.pairings).map(p => ({ 'Pairing ID': p.id, 'Allocator': coName(p.allocatorId),
     'Prime CI': coName(p.counterpartyId), 'Connection': p.connection, 'Detail': p.detail || '', 'Date': xd(p.date) }))), 'Counterparty Pairing');
+  const shared = [...data.interactions].sort((a, b) => a.id - b.id).flatMap(i => (i.materials || []).map(m => ({ 'Interaction ID': i.id, 'Company': coName(i.companyId),
+    'Material': m.name, 'Date Shared': xd(m.date), 'Version': m.version || '' })));
+  XLSX.utils.book_append_sheet(wb, sheet('Material Shared', shared), 'Material Shared');
   return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
 }
