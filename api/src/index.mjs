@@ -21,7 +21,7 @@ async function connect() {
   });
 }
 
-const COMPANY_TYPES = ['Investor', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'];
+const COMPANY_TYPES = ['Investor', 'Consultant', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'];
 const norm = v => (v === undefined || v === null || v === '' ? null : String(v));
 
 /* Update one row inside a transaction. Rejects if someone else changed it since it was

@@ -478,8 +478,11 @@ const company = id => byId(db.companies, id);
 const person = id => byId(db.people, id);
 const nextId = arr => arr.reduce((m, x) => Math.max(m, x.id), 0) + 1;
 const demeisenPeople = () => db.people.filter(p => company(p.companyId)?.type === 'Demeisen');
-const tcls = t => ({ 'Investor': 'inv', 'Prime CI': 'ci', 'Third Party Marketer': 'ci', 'Prior Colleague': 'ci', 'Friendly LP': 'ci', 'Demeisen': 'dem', 'Other': 'oth' }[t] || 'ixn');
-const COMPANY_TYPES = ['Investor', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'];
+const tcls = t => ({ 'Investor': 'inv', 'Consultant': 'inv', 'Prime CI': 'ci', 'Third Party Marketer': 'ci', 'Prior Colleague': 'ci', 'Friendly LP': 'ci', 'Demeisen': 'dem', 'Other': 'oth' }[t] || 'ixn');
+const COMPANY_TYPES = ['Investor', 'Consultant', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'];
+// Companies that allocate (or advise on allocating): the subject of the allocator one-pager, Targeted Allocators and CI Lead.
+const ALLOCATOR_TYPES = ['Investor', 'Consultant', 'Other'];
+const isInvestorLike = c => c?.type === 'Investor' || c?.type === 'Consultant';
 // Firms and people who introduce allocators to Demeisen: the counterparties on CI Lead, Connections and the cap intro one-pager.
 const INTRODUCER_TYPES = ['Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP'];
 const isIntroducer = c => INTRODUCER_TYPES.includes(c?.type);
@@ -804,11 +807,11 @@ function renderHome() {
   const week = open.filter(a => bucket(a) === 'week').sort(byDue);
   const recent = [...db.interactions].sort(byRecent).slice(0, 10);
   const counts = {};
-  last30.forEach(i => { if (i.companyId && company(i.companyId)?.type === 'Investor') counts[i.companyId] = (counts[i.companyId] || 0) + 1; });
+  last30.forEach(i => { if (i.companyId && isInvestorLike(company(i.companyId))) counts[i.companyId] = (counts[i.companyId] || 0) + 1; });
   const active = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const split = list => `${list.filter(i => i.type === 'Interaction').length} interactions · ${list.filter(i => i.type === 'Intel').length} intel`;
   const today = TODAY.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const investors = db.companies.filter(c => c.type === 'Investor');
+  const investors = db.companies.filter(isInvestorLike);
   const pipeline = stages().map(st => [st, investors.filter(c => c.stage === st).length]);
 
   view.innerHTML = `
@@ -863,7 +866,6 @@ const SHARE_TYPES = [
   ['IMA (if SMA)', /\bIMA\b/],
 ];
 let allocId = null, capId = null;
-const ALLOCATOR_TYPES = ['Investor', 'Other'];
 const typedCoOpts = (types, sel) => types.map(t => {
   const cs = db.companies.filter(c => c.type === t).sort((a, b) => a.name.localeCompare(b.name));
   return cs.length ? `<optgroup label="${t}">${cs.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</optgroup>` : '';
@@ -874,8 +876,8 @@ function openOnePager(id) {
 }
 function renderAllocator() {
   if (!allocId || !ALLOCATOR_TYPES.includes(company(allocId)?.type)) {
-    const latest = [...db.interactions].sort(byRecent).find(i => company(i.companyId)?.type === 'Investor');
-    allocId = latest ? latest.companyId : db.companies.find(c => c.type === 'Investor')?.id || null;
+    const latest = [...db.interactions].sort(byRecent).find(i => isInvestorLike(company(i.companyId)));
+    allocId = latest ? latest.companyId : db.companies.find(isInvestorLike)?.id || null;
   }
   const c = company(allocId);
   view.innerHTML = `
@@ -1325,7 +1327,7 @@ function renderCompanies() {
     const open = db.actions.filter(a => a.status === 'Open' && its.some(i => i.id === a.interactionId)).length;
     return { people: db.people.filter(p => p.companyId === c.id).length, last, open };
   };
-  const order = { 'Investor': 0, 'Prime CI': 1, 'Third Party Marketer': 2, 'Prior Colleague': 3, 'Friendly LP': 4, 'Other': 5, 'Demeisen': 6 };
+  const order = { 'Investor': 0, 'Consultant': 1, 'Prime CI': 2, 'Third Party Marketer': 3, 'Prior Colleague': 4, 'Friendly LP': 5, 'Other': 6, 'Demeisen': 7 };
   const rows = db.companies.filter(c => !coStage || c.stage === coStage).sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9) || a.name.localeCompare(b.name));
   const editing = coEdit === 'new' ? { id: null, type: 'Investor', name: '', investorType: '', investmentType: '', stage: '', notes: '' } : coEdit ? company(coEdit) : null;
   const distinct = k => [...new Set(db.companies.map(c => c[k]).filter(Boolean))].sort();
@@ -1482,7 +1484,7 @@ let ciId = null, ciEdit = null;
 function renderCiLead() {
   const cis = db.companies.filter(isIntroducer).sort((a, b) => INTRODUCER_TYPES.indexOf(a.type) - INTRODUCER_TYPES.indexOf(b.type) || a.name.localeCompare(b.name));
   if (!cis.some(c => c.id === ciId)) ciId = cis[0]?.id || null;
-  const allocators = db.companies.filter(c => c.type === 'Investor' || c.type === 'Other');
+  const allocators = db.companies.filter(c => ALLOCATOR_TYPES.includes(c.type));
   const rows = allocators.flatMap(c => ciLeads(c.id).filter(l => l.ciId === ciId).map(l => {
     return { c, ...l, last: db.interactions.filter(i => i.companyId === c.id).sort(byRecent)[0] };
   })).sort((a, b) => (b.last?.date || '').localeCompare(a.last?.date || '') || a.c.name.localeCompare(b.c.name));
@@ -1575,7 +1577,7 @@ function pairingFormHtml(editing) {
   return `<form class="panel edit-panel" id="pa-form">
         <h2>${editing.id ? 'Edit pairing' : 'New pairing'}</h2>
         <div class="fgrid">
-          <div class="field"><label class="lbl" for="pa-al">Allocator</label><select id="pa-al"><option value="">Choose an allocator</option>${typedOpts(['Investor', 'Other'], editing.allocatorId)}</select></div>
+          <div class="field"><label class="lbl" for="pa-al">Allocator</label><select id="pa-al"><option value="">Choose an allocator</option>${typedOpts(ALLOCATOR_TYPES, editing.allocatorId)}</select></div>
           <div class="field"><label class="lbl" for="pa-cp">Introducer</label><select id="pa-cp"><option value="">Choose an introducer</option>${typedOpts([...INTRODUCER_TYPES, 'Other'], editing.counterpartyId)}</select></div>
           <div class="field"><label class="lbl" for="pa-conn">Connection</label><input type="text" id="pa-conn" list="pa-conn-list" maxlength="50" value="${esc(editing.connection)}" placeholder="Choose or type a connection">
             <datalist id="pa-conn-list">${pairingConnections().map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
