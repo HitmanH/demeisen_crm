@@ -16,6 +16,8 @@ Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and
 - `db/migrations/004_pairing_detail.sql`: adds detail and date to pairings. Run it before deploying code that uses them.
 - `db/migrations/005_person_contact_details.sql`: adds personal email and LinkedIn to people.
 - `db/migrations/006_engagement_stage.sql`: adds the engagement stage list and a stage on every company. Rename or reorder stages in the `engagement_stage` table.
+- `db/migrations/007_introducer_types.sql`: adds the Third Party Marketer, Prior Colleague and Friendly LP company types.
+- `db/migrations/008_material_shared.sql`: records material shared on each interaction, with date and version. Add or rename items in the `material_type` table.
 - `db/seed/fictional.sql`: fictional test data.
 
 ## Backups

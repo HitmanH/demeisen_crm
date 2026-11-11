@@ -36,7 +36,7 @@ def date(v, where, warn):
 key = lambda s: (s or '').strip().lower()
 
 warn = []
-companies, people, interactions, links, actions, pairings = [], [], [], [], [], []
+companies, people, interactions, links, actions, pairings, materials = [], [], [], [], [], [], []
 co_ids = {}
 for r in rows('Company'):
     if not text(r.get('company name')): continue
@@ -105,7 +105,21 @@ for r in (rows('Counterparty Pairing') if 'Counterparty Pairing' in wb.sheetname
     seen.add((al, cp, key(conn)))
     pairings.append((i, al, cp, conn, text(r.get('detail')), date(r.get('date'), f'Pairing {i}', warn)))
 
-want = dict(company=len(companies), person=len(people), interaction=len(interactions), interaction_person=len(links), action=len(actions), counterparty_pairing=len(pairings))
+if 'Material Shared' in wb.sheetnames:  # optional: older workbooks have no material tab
+    seen_m = set()
+    for r in rows('Material Shared'):
+        ix = r.get('interaction id'); name = text(r.get('material'))
+        if ix in (None, '') and not name: continue
+        ix = int(ix) if str(ix).strip().isdigit() else None
+        where = f'Material for interaction {ix}'
+        if not ix or ix not in ix_ids: warn.append(f'{where}: interaction not found'); continue
+        if not name: warn.append(f'{where}: no material'); continue
+        if (ix, key(name)) in seen_m: warn.append(f'{where}: {name} listed twice')
+        seen_m.add((ix, key(name)))
+        shared = date(r.get('date shared'), where, warn) or next((x[2] for x in interactions if x[0] == ix), None)
+        materials.append((ix, name, shared, text(r.get('version'))))
+
+want = dict(company=len(companies), person=len(people), interaction=len(interactions), interaction_person=len(links), action=len(actions), counterparty_pairing=len(pairings), interaction_material=len(materials))
 print('workbook', want, 'problems', len(warn))
 for w in warn[:40]: print('  ', w)
 if warn: sys.exit('Stopped: nothing was loaded. Fix the workbook and run again.')
@@ -116,7 +130,7 @@ A = json.loads(os.environ.pop('CRM_SECRET'))
 c = pymysql.connect(host=HOST, user=A['username'], password=A['password'], database=DATABASE, charset='utf8mb4', autocommit=False,
                     connect_timeout=20, ssl_ca=ca, ssl_verify_cert=True, ssl_verify_identity=True)
 k = c.cursor()
-tables = ['company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing']
+tables = ['company', 'person', 'interaction', 'interaction_person', 'action', 'counterparty_pairing', 'interaction_material']
 for t in tables + [t + '_history' for t in tables]:
     k.execute(f'SELECT COUNT(*) FROM {t}')
     if k.fetchone()[0]: sys.exit(f'Stopped: {t} is not empty. Nothing was loaded.')
@@ -128,6 +142,7 @@ try:
     k.executemany('INSERT INTO interaction_person (interaction_id,person_id) VALUES (%s,%s)', links)
     k.executemany('INSERT INTO action (action_id,description,due_date,status,owner_person_id,interaction_id,review) VALUES (%s,%s,%s,%s,%s,%s,%s)', actions)
     k.executemany('INSERT INTO counterparty_pairing (pairing_id,allocator_company_id,counterparty_company_id,connection_type,connection_detail,connection_date) VALUES (%s,%s,%s,%s,%s,%s)', pairings)
+    k.executemany('INSERT INTO interaction_material (interaction_id,material_name,shared_date,version) VALUES (%s,%s,%s,%s)', materials)
     got = {}
     for t in tables:
         k.execute(f'SELECT COUNT(*) FROM {t}'); got[t] = k.fetchone()[0]
