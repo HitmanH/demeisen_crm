@@ -67,19 +67,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* Header */
 header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
-header.top .wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; padding-block: 10px; }
+header.top .wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-block: 10px; }
 .brand { font-family: var(--f-display); font-size: 20px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
 .brand span { font-family: var(--f-body); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-left: 8px; }
 nav.tabs { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 header.top .top-log { align-self: flex-start; margin-top: 2px; }
 header.top .top-log[aria-current="page"] { box-shadow: 0 0 0 2px var(--accent-soft); }
 .tab-row { display: flex; flex-wrap: wrap; gap: 2px; }
-nav.tabs a { padding: 8px 12px; border-radius: var(--r); color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
+nav.tabs a { padding: 8px 9px; border-radius: var(--r); color: var(--muted); text-decoration: none; font-weight: 500; white-space: nowrap; }
 nav.tabs a:hover { color: var(--ink); background: var(--hover); }
 nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 /* Drop-down group in the second row; highlighted while one of its pages is open */
 nav.tabs .menu { position: relative; }
-nav.tabs summary { list-style: none; cursor: pointer; padding: 8px 12px; border-radius: var(--r); color: var(--muted); font-weight: 500; white-space: nowrap; }
+nav.tabs summary { list-style: none; cursor: pointer; padding: 8px 9px; border-radius: var(--r); color: var(--muted); font-weight: 500; white-space: nowrap; }
 nav.tabs summary::-webkit-details-marker { display: none; }
 nav.tabs summary::after { content: '▾'; font-size: 11px; margin-left: 6px; }
 nav.tabs summary:hover { color: var(--ink); background: var(--hover); }
@@ -307,10 +307,11 @@ td.num, th.num { text-align: right; }
         <a href="#todo" data-view="todo">To-do</a>
         <a href="#current" data-view="current">Current Investors</a>
         <a href="#targeted" data-view="targeted">Targeted Allocators</a>
-        <a href="#allocator" data-view="allocator">Allocator One Pager</a>
-        <a href="#capintro" data-view="capintro">Cap Intro One Pager</a>
+        <a href="#finder" data-view="finder">Allocator Finder</a>
       </div>
       <div class="tab-row">
+        <a href="#allocator" data-view="allocator">Allocator One Pager</a>
+        <a href="#capintro" data-view="capintro">Cap Intro / Third Party One Pager</a>
         <a href="#interactions" data-view="interactions">All Interactions</a>
         <a href="#search" data-view="search">Search</a>
         <details class="menu"><summary>Static Data</summary>
@@ -508,7 +509,7 @@ function toast(msg) {
 }
 
 /* ---------- Routing ---------- */
-const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, current: () => renderStagePage('current'), targeted: () => renderStagePage('targeted'), capintro: renderCapIntro, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, current: () => renderStagePage('current'), targeted: () => renderStagePage('targeted'), finder: renderFinder, capintro: renderCapIntro, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
 const view = document.getElementById('view');
 function route() {
   let v = location.hash.slice(1);
@@ -1057,6 +1058,115 @@ function renderStagePage(key) {
   }));
 }
 
+/* ---------- Allocator finder ---------- */
+// One searchable, filterable, sortable list of every allocator (Investor, Consultant and Other companies).
+const blankFinder = () => ({ q: '', stage: '', type: '', invType: '', contact: '', introducer: '', todo: '', sort: 'recent' });
+let fs = blankFinder();
+const FINDER_SORTS = [['recent', 'Last interaction, newest first'], ['stale', 'Last interaction, oldest first'], ['name', 'Name, A to Z'],
+  ['stage', 'Engagement stage'], ['entries', 'Most entries'], ['todos', 'Most open to-dos']];
+const FINDER_CONTACT = [['30', 'Within 30 days'], ['90', 'Within 90 days'], ['over90', 'More than 90 days ago'], ['over180', 'More than 180 days ago'], ['never', 'Never']];
+function renderFinder() {
+  const st = stages();
+  const groups = [['Current', [1, 2]], ...STAGE_PAGES.targeted.groups];
+  const invTypes = [...new Set(db.companies.filter(c => ALLOCATOR_TYPES.includes(c.type)).map(c => c.investorType).filter(Boolean))].sort();
+  const introducers = db.companies.filter(isIntroducer);
+  const opt = (v, label, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(label)}</option>`;
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Allocator Finder</h1><p class="sub">Search and filter every allocator, then sort the list. Search covers names, notes, investor and investment type, and their people.</p></div>
+      <div class="toolbar"><button type="button" class="btn ghost" id="f-csv">Download list (CSV)</button></div></div>
+    <div class="stack">
+      <div class="panel filters">
+        <div class="field"><label class="lbl" for="f-q">Search</label><input type="search" id="f-q" placeholder="e.g. pension, SMA, a contact's name" value="${esc(fs.q)}"></div>
+        <div class="field"><label class="lbl" for="f-stage">Engagement stage</label><select id="f-stage"><option value="">All stages</option>
+          <optgroup label="Groups">${groups.map(([name, nums]) => opt('g:' + name, `${name} (${nums.join(', ')})`, fs.stage)).join('')}</optgroup>
+          <optgroup label="Stages">${st.map((x, k) => opt('s:' + x, `${k + 1}. ${x}`, fs.stage)).join('')}</optgroup></select></div>
+        <div class="field"><label class="lbl" for="f-type">Company type</label><select id="f-type"><option value="">All</option>${ALLOCATOR_TYPES.map(t => opt(t, t, fs.type)).join('')}</select></div>
+        <div class="field"><label class="lbl" for="f-inv">Investor type</label><select id="f-inv"><option value="">All</option>${invTypes.map(t => opt(t, t, fs.invType)).join('')}</select></div>
+        <div class="field"><label class="lbl" for="f-contact">Last interaction</label><select id="f-contact"><option value="">Any time</option>${FINDER_CONTACT.map(([v, l]) => opt(v, l, fs.contact)).join('')}</select></div>
+        <div class="field"><label class="lbl" for="f-intro">Introducer</label><select id="f-intro"><option value="">Any</option><option value="none" ${fs.introducer === 'none' ? 'selected' : ''}>None recorded</option>${typedCoOpts(INTRODUCER_TYPES, +fs.introducer)}</select></div>
+        <div class="field"><label class="lbl" for="f-todo">Open to-dos</label><select id="f-todo"><option value="">Any</option>${[['yes', 'Has open to-dos'], ['overdue', 'Has overdue to-dos'], ['no', 'None open']].map(([v, l]) => opt(v, l, fs.todo)).join('')}</select></div>
+        <div class="field"><label class="lbl" for="f-sort">Sort by</label><select id="f-sort">${FINDER_SORTS.map(([v, l]) => opt(v, l, fs.sort)).join('')}</select></div>
+        <div class="field" style="justify-content:flex-end"><button type="button" class="btn ghost" id="f-clear">Clear filters</button></div>
+      </div>
+      <div class="muted" id="f-count"></div>
+      <div class="panel tbl-wrap" id="f-results"></div>
+    </div>`;
+  const bind = (id, key) => view.querySelector(id).addEventListener('input', e => { fs[key] = e.target.value; renderFinderResults(); });
+  bind('#f-q', 'q'); bind('#f-stage', 'stage'); bind('#f-type', 'type'); bind('#f-inv', 'invType'); bind('#f-contact', 'contact');
+  bind('#f-intro', 'introducer'); bind('#f-todo', 'todo'); bind('#f-sort', 'sort');
+  view.querySelector('#f-clear').addEventListener('click', () => { fs = blankFinder(); renderFinder(); });
+  view.querySelector('#f-csv').addEventListener('click', downloadFinderCsv);
+  renderFinderResults();
+}
+function finderRows() {
+  const st = stages();
+  const groups = Object.fromEntries([['Current', [1, 2]], ...STAGE_PAGES.targeted.groups]);
+  const terms = fs.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = db.companies.filter(c => ALLOCATOR_TYPES.includes(c.type)).map(c => {
+    const its = db.interactions.filter(i => i.companyId === c.id).sort(byRecent);
+    const ids = new Set(its.map(i => i.id));
+    const todo = db.actions.filter(a => a.status === 'Open' && ids.has(a.interactionId));
+    const leads = ciLeads(c.id);
+    const people = db.people.filter(p => p.companyId === c.id);
+    return { c, its, last: its[0], todo, overdue: todo.filter(a => bucket(a) === 'overdue').length, leads, n: st.indexOf(c.stage) + 1,
+      text: [c.name, c.notes, c.investorType, c.investmentType, c.stage, ...people.map(p => `${p.name} ${p.title || ''} ${p.email || ''}`)].join(' ').toLowerCase() };
+  }).filter(r => {
+    if (terms.some(t => !r.text.includes(t))) return false;
+    if (fs.stage.startsWith('g:')) { const nums = groups[fs.stage.slice(2)] || []; if (!(nums.includes(r.n) || (fs.stage === 'g:Other' && !r.n))) return false; }
+    if (fs.stage.startsWith('s:') && r.c.stage !== fs.stage.slice(2)) return false;
+    if (fs.type && r.c.type !== fs.type) return false;
+    if (fs.invType && r.c.investorType !== fs.invType) return false;
+    const ago = r.last ? -daysFrom(r.last.date) : null;
+    if (fs.contact === 'never' && r.last) return false;
+    if (['30', '90'].includes(fs.contact) && (ago === null || ago > +fs.contact)) return false;
+    if (fs.contact === 'over90' && (ago === null || ago <= 90)) return false;
+    if (fs.contact === 'over180' && (ago === null || ago <= 180)) return false;
+    if (fs.introducer === 'none' && r.leads.length) return false;
+    if (fs.introducer && fs.introducer !== 'none' && !r.leads.some(l => l.ciId === +fs.introducer)) return false;
+    if (fs.todo === 'yes' && !r.todo.length) return false;
+    if (fs.todo === 'overdue' && !r.overdue) return false;
+    if (fs.todo === 'no' && r.todo.length) return false;
+    return true;
+  });
+  const lastDate = r => r.last?.date || '';
+  const byName = (a, b) => a.c.name.localeCompare(b.c.name);
+  const sorts = {
+    recent: (a, b) => lastDate(b).localeCompare(lastDate(a)) || byName(a, b),
+    stale: (a, b) => (lastDate(a) || '0').localeCompare(lastDate(b) || '0') || byName(a, b),
+    name: byName,
+    stage: (a, b) => (a.n || 99) - (b.n || 99) || lastDate(b).localeCompare(lastDate(a)) || byName(a, b),
+    entries: (a, b) => b.its.length - a.its.length || byName(a, b),
+    todos: (a, b) => b.todo.length - a.todo.length || b.overdue - a.overdue || byName(a, b)
+  };
+  return rows.sort(sorts[fs.sort] || sorts.recent);
+}
+function renderFinderResults() {
+  const rows = finderRows();
+  const total = db.companies.filter(c => ALLOCATOR_TYPES.includes(c.type)).length;
+  view.querySelector('#f-count').textContent = `${rows.length} of ${total} allocators`;
+  const leadNames = r => r.leads.map(l => company(l.ciId)).filter(Boolean);
+  view.querySelector('#f-results').innerHTML = rows.length ? `<table class="ix-table">
+    <thead><tr><th>Allocator</th><th>Type</th><th>Investor type</th><th>Engagement stage</th><th>Introducer</th><th class="num">Entries</th><th class="num">Open to-dos</th><th>Last interaction</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${coPill(r.c)}</td><td class="nowrap">${esc(r.c.type)}</td><td>${esc(r.c.investorType)}</td>
+      <td class="nowrap"><select class="tgt-stage" data-stage-co="${r.c.id}" aria-label="Engagement stage for ${esc(r.c.name)}">${stageOpts(r.c.stage)}</select></td>
+      <td>${leadNames(r).map(coPill).join(' ') || '<span class="muted">None</span>'}</td><td class="num">${r.its.length}</td>
+      <td class="num">${r.todo.length}${r.overdue ? ` <span class="pill" style="background:var(--crit);color:#fff">${r.overdue} overdue</span>` : ''}</td>
+      <td>${r.last ? `<span class="mono nowrap">${fmt(r.last.date)}</span> <span class="muted">${agoLabel(r.last.date)}</span><a href="#" class="clamp" data-open-int="${r.last.id}">${r.last.format ? esc(r.last.format) + ': ' : ''}${esc(r.last.desc)}</a>` : '<span class="muted">None</span>'}</td></tr>`).join('')}</tbody></table>`
+    : '<div class="empty">No allocators match. Try fewer words or clear the filters.</div>';
+  view.querySelectorAll('#f-results .tgt-stage').forEach(sel => sel.addEventListener('change', () => setStage(company(+sel.dataset.stageCo), sel.value, sel)));
+}
+// The current list as a CSV file, for working on in Excel.
+function downloadFinderCsv() {
+  const q = v => { const t = String(v ?? ''); return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  const head = ['Allocator', 'Company Type', 'Investor Type', 'Investment Type', 'Engagement Stage', 'Introducer', 'Entries', 'Open To-dos', 'Overdue', 'Last Interaction', 'Last Format', 'Last Description'];
+  const lines = finderRows().map(r => [r.c.name, r.c.type, r.c.investorType, r.c.investmentType, r.c.stage, r.leads.map(l => company(l.ciId)?.name).filter(Boolean).join('; '),
+    r.its.length, r.todo.length, r.overdue, r.last?.date || '', r.last?.format || '', r.last?.desc || ''].map(q).join(','));
+  const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `Demeisen allocators ${iso(new Date())}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 /* ---------- Cap intro one-pager ---------- */
 function renderCapIntro() {
   const cis = db.companies.filter(isIntroducer);
@@ -1066,7 +1176,7 @@ function renderCapIntro() {
   }
   const c = company(capId);
   view.innerHTML = `
-    <div class="pagehead"><div><h1>Cap Intro One Pager</h1><p class="sub">Everything on one introducer (Prime CI, third party marketer, prior colleague or friendly LP): the allocators they introduced or lead, their people, activity and what's outstanding.</p></div>
+    <div class="pagehead"><div><h1>Cap Intro / Third Party One Pager</h1><p class="sub">Everything on one introducer (Prime CI, third party marketer, prior colleague or friendly LP): the allocators they introduced or lead, their people, activity and what's outstanding.</p></div>
       <div class="toolbar"><label class="lbl" for="cap-co">Introducer</label>
         <select id="cap-co">${typedCoOpts(INTRODUCER_TYPES, capId)}</select></div></div>
     <div>${c ? capIntroBody(c) : '<div class="panel empty">Add a Prime CI, Third Party Marketer, Prior Colleague or Friendly LP company to see its one-pager.</div>'}</div>`;
