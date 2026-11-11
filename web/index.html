@@ -256,6 +256,16 @@ mark { background: var(--mark); color: inherit; padding: 0 1px; border-radius: 2
 .ix-row.is-open, tbody tr.ix-open, tbody tr.ix-open:hover { background: var(--hover); }
 tbody tr.ix-open td { padding-top: 0; }
 .ix-table .nowrap { white-space: nowrap; }
+details.tgt-group > summary { list-style: none; cursor: pointer; }
+details.tgt-group > summary::-webkit-details-marker { display: none; }
+details.tgt-group > summary h2::before { content: '▸'; display: inline-block; width: 1.1em; color: var(--muted); }
+details.tgt-group[open] > summary h2::before { content: '▾'; }
+.tgt-stage { width: auto; font-size: 13px; padding: 3px 6px; }
+.tgt-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.tgt-list li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
+.tgt-list .mono { flex: none; min-width: 84px; color: var(--muted); }
+.tgt-list .over { color: var(--crit); font-weight: 500; }
+.tgt-list .txt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ix-table .ppl { min-width: 140px; max-width: 220px; color: var(--muted); font-size: 13px; }
 .ix-table .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 260px; max-width: 60ch; }
 .ix-detail { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; max-width: 90ch; }
@@ -290,12 +300,13 @@ td.num, th.num { text-align: right; }
       <div class="tab-row">
         <a href="#home" data-view="home">Overview</a>
         <a href="#todo" data-view="todo">To-do</a>
-        <a href="#interactions" data-view="interactions">Interactions</a>
+        <a href="#targeted" data-view="targeted">Targeted Allocators</a>
         <a href="#allocator" data-view="allocator">Allocator One Pager</a>
         <a href="#capintro" data-view="capintro">Cap Intro One Pager</a>
-        <a href="#search" data-view="search">Search</a>
       </div>
       <div class="tab-row">
+        <a href="#interactions" data-view="interactions">All Interactions</a>
+        <a href="#search" data-view="search">Search</a>
         <details class="menu"><summary>Static Data</summary>
           <div class="menu-list">
             <a href="#companies" data-view="companies">Companies</a>
@@ -484,7 +495,7 @@ function toast(msg) {
 }
 
 /* ---------- Routing ---------- */
-const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, capintro: renderCapIntro, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
+const VIEWS = { home: renderHome, todo: renderTodo, interactions: renderInteractions, allocator: renderAllocator, targeted: renderTargeted, capintro: renderCapIntro, cilead: renderCiLead, pairings: renderPairings, log: renderLog, search: renderSearch, companies: renderCompanies, people: renderPeople, settings: () => { view.innerHTML = ''; } };
 const view = document.getElementById('view');
 function route() {
   let v = location.hash.slice(1);
@@ -957,6 +968,52 @@ function activityPanel(its) {
       <span class="m">${new Date(m + '-01T00:00').toLocaleDateString('en-GB', { month: 'short' })}</span></div>`).join('')}</div></section>`;
 }
 
+/* ---------- Targeted allocators ---------- */
+// Groups follow the engagement stage order (1 to 12) in the stage list, so a rename keeps its group.
+const TARGET_GROUPS = [
+  ['Current', [1, 2], 'Current investors, CF and SMA'],
+  ['Process', [3, 4], 'Onboarding and active progress'],
+  ['Focus', [5, 6], 'Target investors and in process'],
+  ['Catalyst needed', [7], 'Keen, catalyst needed'],
+  ['Distribution list', [8], 'On the distribution list'],
+  ['Other', [9, 10, 11, 12], 'Met, not interested, not connected, and not yet classified']
+];
+let tgtOpen = null;
+function renderTargeted() {
+  const st = stages();
+  const groupOf = c => { const n = st.indexOf(c.stage) + 1; return TARGET_GROUPS.findIndex(g => g[1].includes(n)); };
+  const rows = db.companies.filter(c => ALLOCATOR_TYPES.includes(c.type)).map(c => {
+    const its = db.interactions.filter(i => i.companyId === c.id).sort(byRecent);
+    const ids = new Set(its.map(i => i.id));
+    const todo = db.actions.filter(a => a.status === 'Open' && ids.has(a.interactionId)).sort(byDue);
+    return { c, g: groupOf(c), its, todo, last: its[0]?.date || '' };
+  }).sort((a, b) => b.last.localeCompare(a.last) || a.c.name.localeCompare(b.c.name));
+  const groups = TARGET_GROUPS.map((g, k) => ({ name: g[0], hint: g[2], stages: g[1].map(n => st[n - 1]).filter(Boolean), rows: rows.filter(r => r.g === k || (k === TARGET_GROUPS.length - 1 && r.g < 0)) }));
+  if (!tgtOpen) tgtOpen = new Set(groups.slice(0, -1).map(g => g.name)); // everything but Other starts open
+  const todoList = r => r.todo.length ? `<ul class="tgt-list">${r.todo.slice(0, 4).map(a => `<li><span class="mono ${bucket(a) === 'overdue' ? 'over' : ''}">${a.due ? fmt(a.due) : 'No date'}</span><span class="txt">${esc(a.desc)}${person(a.ownerId) ? ` <span class="muted">· ${esc(person(a.ownerId).name)}</span>` : ''}</span></li>`).join('')}
+    ${r.todo.length > 4 ? `<li class="muted">and ${r.todo.length - 4} more</li>` : ''}</ul>` : '<span class="muted">None open</span>';
+  const ixList = r => r.its.length ? `<ul class="tgt-list">${r.its.slice(0, 3).map(i => `<li><span class="mono">${fmt(i.date)}</span><a href="#" class="txt" data-open-int="${i.id}">${i.format ? esc(i.format) + ': ' : ''}${esc(i.desc)}</a></li>`).join('')}</ul>` : '<span class="muted">No interactions yet</span>';
+  view.innerHTML = `
+    <div class="pagehead"><div><h1>Targeted Allocators</h1><p class="sub">Allocators grouped by engagement stage, each with its open to-dos and latest interactions, most recently contacted first. Set a stage here or on the allocator's one-pager; it saves straight away.</p></div></div>
+    <div class="stack">
+      <div class="tiles">${groups.slice(0, 4).map(g => `<a class="panel tile" href="#tgt-${g.name.replace(/\W/g, '')}" data-tgt-jump="${esc(g.name)}"><span class="n">${g.rows.length}</span><span class="lbl">${esc(g.name)}</span><span class="small">${g.rows.reduce((n, r) => n + r.todo.length, 0)} open to-dos</span></a>`).join('')}</div>
+      ${groups.map(g => `<details class="panel tgt-group" id="tgt-${g.name.replace(/\W/g, '')}" data-tgt="${esc(g.name)}" ${tgtOpen.has(g.name) ? 'open' : ''}>
+        <summary class="sec-head"><h2>${esc(g.name)} <span class="mono">${g.rows.length}</span></h2><span class="muted" style="font-size:12.5px">${esc(g.stages.join(' · ') || g.hint)}</span></summary>
+        ${g.rows.length ? `<div class="tbl-wrap"><table class="ix-table">
+          <thead><tr><th>Allocator</th><th>Engagement stage</th><th>Open to-dos</th><th>Latest interactions</th></tr></thead>
+          <tbody>${g.rows.map(r => `<tr><td>${coPill(r.c)}</td><td class="nowrap"><select class="tgt-stage" data-stage-co="${r.c.id}" aria-label="Engagement stage for ${esc(r.c.name)}">${stageOpts(r.c.stage)}</select></td><td style="min-width:220px">${todoList(r)}</td><td style="min-width:300px">${ixList(r)}</td></tr>`).join('')}</tbody></table></div>`
+          : '<div class="empty">No allocators at these stages yet.</div>'}
+      </details>`).join('')}
+    </div>`;
+  view.querySelectorAll('.tgt-stage').forEach(sel => sel.addEventListener('change', () => setStage(company(+sel.dataset.stageCo), sel.value, sel)));
+  view.querySelectorAll('details.tgt-group').forEach(d => d.addEventListener('toggle', () => { if (d.open) tgtOpen.add(d.dataset.tgt); else tgtOpen.delete(d.dataset.tgt); }));
+  view.querySelectorAll('[data-tgt-jump]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    const d = view.querySelector(`details[data-tgt="${CSS.escape(a.dataset.tgtJump)}"]`);
+    d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+}
+
 /* ---------- Cap intro one-pager ---------- */
 function renderCapIntro() {
   const cis = db.companies.filter(isIntroducer);
@@ -1073,7 +1130,7 @@ function ixDetail(it) {
 function renderInteractions() {
   const count = t => db.interactions.filter(i => t === 'all' || i.type === t).length;
   view.innerHTML = `
-    <div class="pagehead"><div><h1>Interactions &amp; intel</h1><p class="sub">Everything logged, newest first. Click a row to see the full entry.</p></div>
+    <div class="pagehead"><div><h1>All interactions &amp; intel</h1><p class="sub">Everything logged, newest first. Click a row to see the full entry.</p></div>
       <div class="toolbar">
         <button type="button" class="btn ghost" id="ix-contacts" data-pe-co="${esc(ixState.company)}">Contacts</button></div></div>
     <div class="stack">
