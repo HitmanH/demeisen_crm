@@ -41,7 +41,7 @@ co_ids = {}
 for r in rows('Company'):
     if not text(r.get('company name')): continue
     i = int(r['company id']); t = text(r.get('company type'))
-    if t not in ('Investor', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'): warn.append(f'Company {i}: type not recognised')
+    if t not in ('Investor', 'Consultant', 'Prime CI', 'Third Party Marketer', 'Prior Colleague', 'Friendly LP', 'Other', 'Demeisen'): warn.append(f'Company {i}: type not recognised')
     if key(r['company name']) in co_ids: warn.append(f'Company {i}: duplicate name')
     co_ids[key(r['company name'])] = i
     companies.append((i, t, text(r['company name']), text(r.get('investor type')), text(r.get('investment type')),

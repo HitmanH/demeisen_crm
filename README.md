@@ -18,6 +18,7 @@ Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and
 - `db/migrations/006_engagement_stage.sql`: adds the engagement stage list and a stage on every company. Rename or reorder stages in the `engagement_stage` table.
 - `db/migrations/007_introducer_types.sql`: adds the Third Party Marketer, Prior Colleague and Friendly LP company types.
 - `db/migrations/008_material_shared.sql`: records material shared on each interaction, with date and version. Add or rename items in the `material_type` table.
+- `db/migrations/009_consultant_type.sql`: adds the Consultant company type.
 - `db/seed/fictional.sql`: fictional test data.
 
 ## Backups
