@@ -50,7 +50,7 @@ jobs:
           aws lambda update-function-code --function-name "$FUNCTION" --zip-file fileb://api/function.zip --query LastUpdateStatus --output text
           aws lambda wait function-updated-v2 --function-name "$FUNCTION"
       - name: Deploy page
-        run: aws s3 cp web/index.html "s3://$SITE_BUCKET/index.html" --content-type 'text/html; charset=utf-8'
+        run: aws s3 cp web/index.html "s3://$SITE_BUCKET/index.html" --content-type 'text/html; charset=utf-8' --cache-control 'no-cache'
       - name: Check the live site
         run: |
           test "$(curl -s -o /dev/null -w '%{http_code}' "$SITE_URL/")" = 200

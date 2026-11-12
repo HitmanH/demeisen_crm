@@ -5,6 +5,13 @@ Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and
 ## Layout
 
 - `web/index.html`: the website, a single page with no build step.
+  Shared parts are inlined into it between marker comments, so it stays one file:
+  - `demeisen-ui` (colours, type, components, logo): `python3 ../demeisen-ui/inline.py <ref> web/index.html`
+  - `demeisen-auth` (browser sign-in with PKCE): `python3 ../demeisen-auth/inline.py <ref> web/index.html`
+
+  Don't edit inside the markers; change the shared repo and re-run the script. CRM-only styles follow the markers.
+  The Demeisen bar at the top (the same in every Demeisen app) links to the intranet; set `apps` in `config.js`
+  to change it (`[]` shows only the CRM, for a standalone copy).
 - `db/migrations/001_schema.sql`: MySQL 8.4 schema for Amazon RDS, with trigger-based history (`valid_from` / `valid_to`).
 
 - `api/`: API and nightly backup, as one AWS Lambda function.
