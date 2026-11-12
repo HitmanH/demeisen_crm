@@ -10,8 +10,8 @@ Internal CRM for Demeisen LLP: investor and cap intro contacts, interactions and
   - `demeisen-auth` (browser sign-in with PKCE): `python3 ../demeisen-auth/inline.py <ref> web/index.html`
 
   Don't edit inside the markers; change the shared repo and re-run the script. CRM-only styles follow the markers.
-  The header's app switcher links to the intranet; set `apps` in `config.js` to change it (`[]` hides it, for a
-  standalone copy of the CRM).
+  The Demeisen bar at the top (the same in every Demeisen app) links to the intranet; set `apps` in `config.js`
+  to change it (`[]` shows only the CRM, for a standalone copy).
 - `db/migrations/001_schema.sql`: MySQL 8.4 schema for Amazon RDS, with trigger-based history (`valid_from` / `valid_to`).
 
 - `api/`: API and nightly backup, as one AWS Lambda function.
